@@ -2,7 +2,7 @@
 layout: post
 title: "误用snprintf导致的bug"
 date: 2014-09-29
-categories: jekyll update
+categories: tech
 ---
 
 用C语言自己实现一套log函数，如下：
