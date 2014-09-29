@@ -1,0 +1,90 @@
+---
+layout: post
+title: "误用snprintf导致的bug"
+date: 2014-09-29
+categories: jekyll update
+---
+
+用C语言自己实现一套log函数，如下：
+
+{% highlight c linenos %}
+void __my_log_fmt(my_log_type type, const char *file, size_t line, const char *fmt, ...)
+{
+    int      n;
+    int      log_fd;
+    char     content[MYLOGMAXLINE];
+    va_list  ap;
+
+    /* 日志前缀 */
+    if (type == MY_LOG_ERROR) {
+        /* 如果日志级别是ERROR，需要打印出错的文件和行数 */
+        n = snprintf(content, MYLOGMAXLINE, "%s%s:%ld ", my_cur_time_str(), file, line);
+    } else {
+        n = snprintf(content, FYLOGMAXLINE, "%s", my_cur_time_str());
+    }
+
+    /* 日志内容，如果前缀加正文内容超过MYLOGMAXLINE，则截断 */
+    va_start(ap, fmt);
+    n += vsnprintf(content + n, MYLOGMAXLINE - n, fmt, ap);
+    va_end(ap);
+
+    log_fd = __my_log_type_fd(type);
+    write(log_fd, content, n);
+}
+
+{% endhighlight %}
+
+在第18行，本意是想保证待打印的日志内容存放到content缓冲区不溢出，但是实际上，当日志长度
+超过MYLOGMAXLINE时，输出的日志内容将会出现一些乱码，或者是程序崩溃，这是为什么呢？
+
+注意程序中n这个变量，本意是想记录content缓冲区中实际内容的长度。但是查看snprintf的文档(man snprintf):
+
+{% highlight text %}
+   Return value:
+       Upon successful return, these functions return the number of characters printed 
+       (excluding the null  byte  used  to  end  output  to strings).
+
+       The  functions  snprintf()  and  vsnprintf() do not write more than size bytes 
+       (including the terminating null byte ('\0')).  If the output was truncated due 
+       to this limit then the return value is the number of characters (excluding the 
+       terminating null byte) which would have been written to the final string if enough
+       space had been available.  Thus, a return value of size or more means that the
+       output was truncated.  (See also below under NOTES.)
+
+       If an output error is encountered, a negative value is returned.
+{% endhighlight %}
+
+printf簇函数的返回值，并不是实际打印出来的长度，而是实际应该打印的长度。例如：
+
+{% highlight c linenos %}
+
+void somefunc()
+{
+    int n;
+    char buf[8];
+    n = snprintf(buf, sizeof(buf), "%s\n", "hello world");
+    // buf: hello wo
+    // n: 12 (strlen("hello world") + strlen("\n"))
+}
+
+{% endhighlight %}
+
+因此，在上面的log函数中的第22行，调用write操作时，n的值可能会超过MYLOGMAXLINE，导致write函数
+读取content缓冲区越界。
+
+另外提一个问题，如果想拷贝一段内存，除了使用memcpy函数，是否也可以使用snprintf呢？
+
+答案是不能。snprintf函数确实可以把一个地址开始的一段内存输出到另一块缓冲区中，但是snprintf遇到
+中途出现的0就会结束，导致拷贝不完整。更重要的是：如果这段内存中没有0，snprintf会为了计算返回值，
+而一直朝后面读，很有可能会读到后面的非法地址，导致段错误。
+
+
+
+
+
+
+
+
+
+
+
