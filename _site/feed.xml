@@ -4,10 +4,10 @@
     <title>Blog of Finesse</title>
     <description>心似明月常自在 意如流水任东西
 </description>
-    <link>http://yourdomain.com/</link>
-    <atom:link href="http://yourdomain.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 29 Sep 2014 17:12:04 +0800</pubDate>
-    <lastBuildDate>Mon, 29 Sep 2014 17:12:04 +0800</lastBuildDate>
+    <link>http://someaddr.com/</link>
+    <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Mon, 29 Sep 2014 17:33:44 +0800</pubDate>
+    <lastBuildDate>Mon, 29 Sep 2014 17:33:44 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -78,8 +78,8 @@
 
 </description>
         <pubDate>Mon, 29 Sep 2014 00:00:00 +0800</pubDate>
-        <link>http://yourdomain.com/tech/2014/09/29/snprintf.html</link>
-        <guid isPermaLink="true">http://yourdomain.com/tech/2014/09/29/snprintf.html</guid>
+        <link>http://someaddr.com/tech/2014/09/29/snprintf.html</link>
+        <guid isPermaLink="true">http://someaddr.com/tech/2014/09/29/snprintf.html</guid>
         
         
         <category>tech</category>
@@ -104,8 +104,8 @@
 
 </description>
         <pubDate>Wed, 20 Aug 2014 01:37:01 +0800</pubDate>
-        <link>http://yourdomain.com/jekyll/update/2014/08/20/welcome-to-jekyll.html</link>
-        <guid isPermaLink="true">http://yourdomain.com/jekyll/update/2014/08/20/welcome-to-jekyll.html</guid>
+        <link>http://someaddr.com/jekyll/update/2014/08/20/welcome-to-jekyll.html</link>
+        <guid isPermaLink="true">http://someaddr.com/jekyll/update/2014/08/20/welcome-to-jekyll.html</guid>
         
         
         <category>jekyll</category>
