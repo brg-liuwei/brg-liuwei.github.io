@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>Blog of Finesse</title>
+    <title>和我一起学leveldb [0]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
     <link rel="stylesheet" href="/css/main.css">
-    <link rel="canonical" href="http://someaddr.com/">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/15/leveldb-0.html">
 </head>
 
 
@@ -54,47 +54,49 @@
 
     <div class="page-content">
       <div class="wrapper">
-        <div class="home">
+        <div class="post">
 
-  <h1 class="page-heading">Declarer will ofter score another, if his honor you don't cover</h1>
+  <header class="post-header">
+    <h1 class="post-title">和我一起学leveldb [0]</h1>
+    <p class="post-meta">Oct 15, 2014</p>
+  </header>
 
-  <ul class="post-list">
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
+  <article class="post-content">
+    <p>近段时间在工作中使用leveldb较多，越来越觉得这个工具用起来相当方便(如果你不知道什么是leveldb，请看 <a href="https://github.com/google/leveldb">这里</a>)，关于leveldb的背景，这里就不多言了，毕竟不是写学术论文。一直想认真读一读leveldb的源码，学习Google的两位大牛工程师的杰作，无赖之前有两次都是读到中途因为各种事务中断很长时间，导致接续不济，青黄不接。于是萌生写这个连载的念头，一来是push自己，二来也是做一份笔记，以后可以备忘复习，另外也可以留一点下水拙作，以供同仁贻笑大方。</p>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-0.html">和我一起学leveldb [0]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 14, 2014</span>
+<p>先介绍一下leveldb的代码结构和说明文档：</p>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/14/twemproxy-macro.html">提升C程序员的逼格：从twemproxy源码学习宏定义技巧</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Sep 29, 2014</span>
+<pre><code>leveldb-1.4.0  
+  |
+  +--- port           &lt;=== 提供各个平台的基本接口
+  |
+  +--- util           &lt;=== 提供一些通用工具类
+  |
+  +--- helpers
+  |      |
+  |      +--- memenv  &lt;=== Env的一个具体实现(Env是leveldb封装的运行环境)
+  |
+  +--- table          &lt;=== 磁盘数据结构
+  |
+  +--- db             &lt;=== db的所有实现
+  |
+  +--- doc
+        |
+        +--- table_format.txt   &lt;=== 磁盘文件数据结构说明
+        |
+        +--- log_format.txt     &lt;=== 日志文件（用于宕机恢复未刷盘的数据）数据结构说明
+        |
+        +--- impl.html          &lt;=== 一些实现
+        |
+        +--- index.html         &lt;=== 使用说明
+        |
+        +--- bench.html         &lt;=== 测试数据
+</code></pre>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/09/29/snprintf.html">误用snprintf导致的bug</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Aug 20, 2014</span>
+<p>我将按上面目录结构的顺序（下面的目录中的代码会依赖于前面的代码）来逐步分析源码。</p>
 
-        <h2>
-          <a class="post-link" href="/jekyll/update/2014/08/20/welcome-to-jekyll.html">Welcome to Jekyll!</a>
-        </h2>
-      </li>
-    
-  </ul>
 
-  <p class="rss-subscribe">subscribe <a href="/feed.xml">via RSS</a></p>
+  </article>
 
 </div>
 

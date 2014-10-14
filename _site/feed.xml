@@ -6,9 +6,54 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 14 Oct 2014 23:58:54 +0800</pubDate>
-    <lastBuildDate>Tue, 14 Oct 2014 23:58:54 +0800</lastBuildDate>
+    <pubDate>Wed, 15 Oct 2014 01:16:35 +0800</pubDate>
+    <lastBuildDate>Wed, 15 Oct 2014 01:16:35 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
+    
+      <item>
+        <title>和我一起学leveldb [0]</title>
+        <description>&lt;p&gt;近段时间在工作中使用leveldb较多，越来越觉得这个工具用起来相当方便(如果你不知道什么是leveldb，请看 &lt;a href=&quot;https://github.com/google/leveldb&quot;&gt;这里&lt;/a&gt;)，关于leveldb的背景，这里就不多言了，毕竟不是写学术论文。一直想认真读一读leveldb的源码，学习Google的两位大牛工程师的杰作，无赖之前有两次都是读到中途因为各种事务中断很长时间，导致接续不济，青黄不接。于是萌生写这个连载的念头，一来是push自己，二来也是做一份笔记，以后可以备忘复习，另外也可以留一点下水拙作，以供同仁贻笑大方。&lt;/p&gt;
+
+&lt;p&gt;先介绍一下leveldb的代码结构和说明文档：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;leveldb-1.4.0  
+  |
+  +--- port           &amp;lt;=== 提供各个平台的基本接口
+  |
+  +--- util           &amp;lt;=== 提供一些通用工具类
+  |
+  +--- helpers
+  |      |
+  |      +--- memenv  &amp;lt;=== Env的一个具体实现(Env是leveldb封装的运行环境)
+  |
+  +--- table          &amp;lt;=== 磁盘数据结构
+  |
+  +--- db             &amp;lt;=== db的所有实现
+  |
+  +--- doc
+        |
+        +--- table_format.txt   &amp;lt;=== 磁盘文件数据结构说明
+        |
+        +--- log_format.txt     &amp;lt;=== 日志文件（用于宕机恢复未刷盘的数据）数据结构说明
+        |
+        +--- impl.html          &amp;lt;=== 一些实现
+        |
+        +--- index.html         &amp;lt;=== 使用说明
+        |
+        +--- bench.html         &amp;lt;=== 测试数据
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;我将按上面目录结构的顺序（下面的目录中的代码会依赖于前面的代码）来逐步分析源码。&lt;/p&gt;
+
+</description>
+        <pubDate>Wed, 15 Oct 2014 00:00:00 +0800</pubDate>
+        <link>http://someaddr.com/tech/2014/10/15/leveldb-0.html</link>
+        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/15/leveldb-0.html</guid>
+        
+        
+        <category>tech</category>
+        
+      </item>
     
       <item>
         <title>提升C程序员的逼格：从twemproxy源码学习宏定义技巧</title>
