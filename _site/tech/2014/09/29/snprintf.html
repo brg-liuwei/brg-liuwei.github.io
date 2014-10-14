@@ -7,7 +7,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
     <title>误用snprintf导致的bug</title>
-    <meta name="description" content="心似明月常自在 意如流水任东西
+    <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
     <link rel="stylesheet" href="/css/main.css">
@@ -126,7 +126,6 @@
 中途出现的0就会结束，导致拷贝不完整。更重要的是：如果这段内存中没有0，snprintf会为了计算返回值，
 而一直朝后面读，很有可能会读到后面的非法地址，导致段错误。</p>
 
-
   </article>
 
 </div>
@@ -169,7 +168,7 @@
       </div>
 
       <div class="footer-col  footer-col-3">
-        <p class="text">心似明月常自在 意如流水任东西
+        <p class="text">岂能尽如人意 但求无愧我心
 </p>
       </div>
     </div>

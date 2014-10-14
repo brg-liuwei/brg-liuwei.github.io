@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>提升C程序员的逼格：从twemproxy源码学习宏定义技巧</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/14/twemproxy-macro.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">提升C程序员的逼格：从twemproxy源码学习宏定义技巧</h1>
+    <p class="post-meta">Oct 14, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p><a href="https://github.com/twitter/twemproxy">twemproxy</a>是twitter开发的用于redis或memcache的proxy，其原理是对key计算hash，然后对节点数取模，就映射到了对应的redis/memcache节点上。当然如果要添加或者删除节点，需要手动去做数据迁移。</p>
+
+<p>今天和前同事默罕默德•凯讨论twemproxy中的一段代码，颇有意思：</p>
+
+<p>File: <a href="https://github.com/twitter/twemproxy/blob/master/src/nc_conf.c">src/nc_conf.c</a></p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno"> 1</span> <span class="cp">#define DEFINE_ACTION(_hash, _name) string(#_name),</span>
+<span class="lineno"> 2</span> <span class="k">static</span> <span class="k">struct</span> <span class="n">string</span> <span class="n">hash_strings</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="lineno"> 3</span>     <span class="n">HASH_CODEC</span><span class="p">(</span> <span class="n">DEFINE_ACTION</span> <span class="p">)</span>
+<span class="lineno"> 4</span>     <span class="n">null_string</span>
+<span class="lineno"> 5</span> <span class="p">};</span>
+<span class="lineno"> 6</span> <span class="cp">#undef DEFINE_ACTION</span>
+<span class="lineno"> 7</span> 
+<span class="lineno"> 8</span> <span class="cp">#define DEFINE_ACTION(_hash, _name) hash_##_name,</span>
+<span class="lineno"> 9</span> <span class="k">static</span> <span class="kt">hash_t</span> <span class="n">hash_algos</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="lineno">10</span>     <span class="n">HASH_CODEC</span><span class="p">(</span> <span class="n">DEFINE_ACTION</span> <span class="p">)</span>
+<span class="lineno">11</span>     <span class="nb">NULL</span>
+<span class="lineno">12</span> <span class="p">};</span>
+<span class="lineno">13</span> <span class="cp">#undef DEFINE_ACTION</span></code></pre></div>
+
+<p>其中HASH_CODEC的定义在：<a href="https://github.com/twitter/twemproxy/blob/master/src/hashkit/nc_hashkit.h">src/hashkit/nc_hashkit.h</a></p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno"> 1</span> <span class="cp">#define HASH_CODEC(ACTION)                      \</span>
+<span class="lineno"> 2</span> <span class="cp">    ACTION( HASH_ONE_AT_A_TIME, one_at_a_time ) \</span>
+<span class="lineno"> 3</span> <span class="cp">    ACTION( HASH_MD5,           md5           ) \</span>
+<span class="lineno"> 4</span> <span class="cp">    ACTION( HASH_CRC16,         crc16         ) \</span>
+<span class="lineno"> 5</span> <span class="cp">    ACTION( HASH_CRC32,         crc32         ) \</span>
+<span class="lineno"> 6</span> <span class="cp">    ACTION( HASH_CRC32A,        crc32a        ) \</span>
+<span class="lineno"> 7</span> <span class="cp">    ACTION( HASH_FNV1_64,       fnv1_64       ) \</span>
+<span class="lineno"> 8</span> <span class="cp">    ACTION( HASH_FNV1A_64,      fnv1a_64      ) \</span>
+<span class="lineno"> 9</span> <span class="cp">    ACTION( HASH_FNV1_32,       fnv1_32       ) \</span>
+<span class="lineno">10</span> <span class="cp">    ACTION( HASH_FNV1A_32,      fnv1a_32      ) \</span>
+<span class="lineno">11</span> <span class="cp">    ACTION( HASH_HSIEH,         hsieh         ) \</span>
+<span class="lineno">12</span> <span class="cp">    ACTION( HASH_MURMUR,        murmur        ) \</span>
+<span class="lineno">13</span> <span class="cp">    ACTION( HASH_JENKINS,       jenkins       ) \</span></code></pre></div>
+
+<p>刚看到这段宏定义的时候会有点点纳闷，因为在源代码中检索不到HASH_CODEC里面定义的ACTION。仔细一看，原来ACTION是HASH_CODEC传进来的参数，而在前面nc_conf.c中，先定义了“函数” DEFINE_ACTION，然后把DEFINE_ACTION作为“参数”传到HASH_CODEC中。其实是实现了一个类似把函数当成参数传递的功能，其实把hash_strings扩展开来，就相当于：</p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno"> 1</span> <span class="cm">/* 这里的DEFINE_ACTION就是HASH_CODEC里面的ACTION，</span>
+<span class="lineno"> 2</span> <span class="cm">   宏定义里面的#号表示把后面替换的符号转换成字符串</span>
+<span class="lineno"> 3</span> <span class="cm">   （例如：string(#md5) ==&gt; string(&quot;md5&quot;) ）</span>
+<span class="lineno"> 4</span> <span class="cm"> */</span>
+<span class="lineno"> 5</span> <span class="cp">#define DEFINE_ACTION(_hash, _name) string(#_name),</span>
+<span class="lineno"> 6</span> <span class="k">static</span> <span class="k">struct</span> <span class="n">string</span> <span class="n">hash_strings</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="lineno"> 7</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;one_at_a_time&quot;</span><span class="p">)</span> \
+<span class="lineno"> 8</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;md5&quot;</span><span class="p">),</span> \
+<span class="lineno"> 9</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;crc16&quot;</span><span class="p">),</span> \
+<span class="lineno">10</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;crc32&quot;</span><span class="p">),</span> \
+<span class="lineno">11</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;crc32a&quot;</span><span class="p">),</span> \
+<span class="lineno">12</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;fnv1_64&quot;</span><span class="p">),</span> \
+<span class="lineno">13</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;fnv1a_64&quot;</span><span class="p">),</span> \
+<span class="lineno">14</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;fnv1_32&quot;</span><span class="p">),</span> \
+<span class="lineno">15</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;fnv1a_32&quot;</span><span class="p">),</span> \
+<span class="lineno">16</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;hsieh&quot;</span><span class="p">),</span> \
+<span class="lineno">17</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;murmur&quot;</span><span class="p">),</span> \
+<span class="lineno">18</span>     <span class="n">string</span><span class="p">(</span><span class="s">&quot;jenkins&quot;</span><span class="p">),</span> \
+<span class="lineno">19</span>     <span class="n">null_string</span>
+<span class="lineno">20</span> <span class="p">};</span>
+<span class="lineno">21</span> <span class="cp">#undef DEFINE_ACTION</span></code></pre></div>
+
+<p>再去<a href="https://github.com/twitter/twemproxy/blob/master/src/nc_string.h">src/nc_string.h</a>中看string定义，就一目了然了：</p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno">1</span> <span class="k">struct</span> <span class="n">string</span> <span class="p">{</span>
+<span class="lineno">2</span>     <span class="kt">uint32_t</span> <span class="n">len</span><span class="p">;</span>   <span class="cm">/* string length */</span>
+<span class="lineno">3</span>     <span class="kt">uint8_t</span>  <span class="o">*</span><span class="n">data</span><span class="p">;</span> <span class="cm">/* string data */</span>
+<span class="lineno">4</span> <span class="p">};</span>
+<span class="lineno">5</span> 
+<span class="lineno">6</span> <span class="cp">#define string(_str)   { sizeof(_str) - 1, (uint8_t *)(_str) }</span>
+<span class="lineno">7</span> <span class="cp">#define null_string    { 0, NULL }</span></code></pre></div>
+
+<p>相同的道理，再来看这一段：</p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno"> 1</span> <span class="cm">/* 宏定义中的##号表示把前后两个符号连接成一个符号（注意不是字符串），</span>
+<span class="lineno"> 2</span> <span class="cm">   这里的_name是宏参数，注意hash_不是_hash，就仅仅是个符号而已，</span>
+<span class="lineno"> 3</span> <span class="cm">   因此, ACTION(HASH_MD5, md5) 就直接展开成为 hash_md5</span>
+<span class="lineno"> 4</span> <span class="cm"> */</span>
+<span class="lineno"> 5</span> <span class="cp">#define DEFINE_ACTION(_hash, _name) hash_##_name,</span>
+<span class="lineno"> 6</span> <span class="k">static</span> <span class="kt">hash_t</span> <span class="n">hash_algos</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="lineno"> 7</span>     <span class="n">HASH_CODEC</span><span class="p">(</span> <span class="n">DEFINE_ACTION</span> <span class="p">)</span>
+<span class="lineno"> 8</span>     <span class="nb">NULL</span>
+<span class="lineno"> 9</span> <span class="p">};</span>
+<span class="lineno">10</span> <span class="cp">#undef DEFINE_ACTION</span></code></pre></div>
+
+<p>在<a href="https://github.com/twitter/twemproxy/blob/master/src/nc_server.h">src/nc_server.h</a>中，定义了hash_t:</p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno">1</span> <span class="k">typedef</span> <span class="nf">uint32_t</span> <span class="p">(</span><span class="o">*</span><span class="kt">hash_t</span><span class="p">)(</span><span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="p">,</span> <span class="kt">size_t</span><span class="p">);</span></code></pre></div>
+
+<p>所以hash_algos是一个函数指针数组，这个宏定义展开就是：</p>
+
+<div class="highlight"><pre><code class="language-c" data-lang="c"><span class="lineno"> 1</span> <span class="k">static</span> <span class="kt">hash_t</span> <span class="n">hash_algos</span><span class="p">[]</span> <span class="o">=</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="n">hash_one_at_a_time</span> \
+<span class="lineno"> 3</span>     <span class="n">hash_md5</span><span class="p">,</span> \
+<span class="lineno"> 4</span>     <span class="n">hash_crc16</span><span class="p">,</span> \
+<span class="lineno"> 5</span>     <span class="n">hash_crc32</span><span class="p">,</span> \
+<span class="lineno"> 6</span>     <span class="n">hash_crc32a</span><span class="p">,</span> \
+<span class="lineno"> 7</span>     <span class="n">hash_fnv1_64</span><span class="p">,</span> \
+<span class="lineno"> 8</span>     <span class="n">hash_fnv1a_64</span><span class="p">,</span> \
+<span class="lineno"> 9</span>     <span class="n">hash_fnv1_32</span><span class="p">,</span> \
+<span class="lineno">10</span>     <span class="n">hash_fnv1a_32</span><span class="p">,</span> \
+<span class="lineno">11</span>     <span class="n">hash_hsieh</span><span class="p">,</span> \
+<span class="lineno">12</span>     <span class="n">hash_murmur</span><span class="p">,</span> \
+<span class="lineno">13</span>     <span class="n">hash_jenkins</span><span class="p">,</span> \
+<span class="lineno">14</span>     <span class="nb">NULL</span>
+<span class="lineno">15</span> <span class="p">};</span></code></pre></div>
+
+<p>头文件中用先定义DEFINE_ACTION，把这个“函数”当成一个参数传入到另一个宏中，然后再undefine，就像是在用一个变量不停地赋值然后传入到另一个函数中去，只需要用一行代码去将DEFINE_ACTION定义成一个生成规则，再定义HASH_CODEC，通过这段让人眼花缭乱的代码，可以完成多个数组的赋值，不得不说这是一个C语言工程师提升逼格的必备技巧！</p>
+
+
+  </article>
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
