@@ -1,0 +1,182 @@
+---
+layout: post
+title: "和我一起学习leveldb [1 port目录]"
+date: 2014-10-15
+categories: tech
+---
+
+port目录是用来做平台相关工作的，这个目录里面的代码比较简单。既然简单，那么我就可以多用一些篇幅来讨论细节问题，力争能够深入浅出，把技术问题讨论清楚。
+
+这个目录里面的代码结构如下：
+
+    port
+      |
+      +--- port.h   <=== 对外提供的头文件，根据不同平台include不同的头文件，无需分析
+      |
+      +--- atomic_pointer.h   <=== 支持原子操作的指针
+      |
+      +--- port_posix.h       <=== posix平台
+      +--- port_posix.cc
+      |
+      +--- port_android.h     <=== android平台
+      +--- port_android.cc
+      |
+      +--- port_example.h     <=== 为支持leveldb在其他平台提供的一个实现接口的例子
+      |
+      +--- win
+            |
+            +--- stdint.h     <=== windows平台（关于windows平台的知识我不懂，因此不分析）
+            
+我们首先来看**atomic_pointer.h**。这里面提供了一个**AtomicPointer**类：
+
+{% highlight c++ linenos %}
+// AtomicPointer built using platform-specific MemoryBarrier()
+#if defined(LEVELDB_HAVE_MEMORY_BARRIER)
+class AtomicPointer {
+    private:
+        void* rep_;
+    public:
+        AtomicPointer() { }
+        explicit AtomicPointer(void* p) : rep_(p) {}
+        inline void* NoBarrier_Load() const { return rep_; }
+        inline void NoBarrier_Store(void* v) { rep_ = v; }
+        inline void* Acquire_Load() const {
+            void* result = rep_;
+            MemoryBarrier();
+            return result;
+        }
+        inline void Release_Store(void* v) {
+            MemoryBarrier();
+            rep_ = v;
+        }
+};
+{% endhighlight %}
+
+AtomicPointer提供了四种操作：
+
+    void* AtomicPointer::NoBarrier_Load()          ---  非Barrier得到存入的指针
+    void AtomicPointer::NoBarrier_Store(void* v)   ---  非Barrier存入指针
+    void* AtomicPointer::Acquire_Load()            ---  Barrier获取指针
+    void AtomicPointer::Release_Store(void *v)     ---  Barrier存入指针
+
+我们先看在宏定义**LEVELDB_HAVE_MEMORY_BARRIER**的这一段代码，在前面两个**NoBarrier**前缀的函数中，其实就是简单地做了一件事，用成员变量保存一个指针或者是把保存的指针返回，而后面两个函数的最后一句话前面，都有一个`MemoryBarrier()`调用。那**MemoryBarrier**的作用是什么呢？其实它是用于防止编译器优化。我们知道，如果是几个不相关的指令，或者是可以优化的指令，例如
+{% highlight c linenos %}
+// example 1
+    int a = 1;
+    char *b = "hello world";
+    short c = 3;
+{% endhighlight %}
+或
+{% highlight c linenos %}
+// example 2
+    // void *ptr, v, _store;
+    v = ptr;
+    _store = v;
+    somefunc();
+    v = _store;
+{% endhighlight %}
+
+编译器可能会处于效率方面的考虑，更改前面a,b,c几个指令的执行顺序。在第二段示例代码中，v的值是没有改变的，那么编译器可能会认为`_store = v; v = _store;` 是多余的，就直接把这一段给“优化”掉了。这段代码在单线程中确实是多余的，但是在多线程环境下，可能在`somefunc()`被调用的时候，另一个线程把v的值给改变了，而这种情况是编译器无法发现的。因此，为了避免编译器优化，就在这里加一个MemoryBarrier指令，这样就相当于告诉编译器，在**MemoryBarrier**前后的代码可能因为某种原因发生了改变，优化的时候，绝对不能把**MemoryBarrier**后面的代码提到前面去，也不能把优化掉。我再举一个例子：
+
+{% highlight c linenos %}
+// get start time
+for (int i = 0; i != 100000; i++) {
+    MemoryBarrier()
+}
+// get end time
+{% endhighlight %}
+
+这段代码，是想知道for循环空转100000次的耗时，这里就需要加入一个**MemoryBarrier**，如果不加，那么编译器可能就会直接把这个无意义的for循环直接优化掉了。
+
+那么**MemoryBarrier**到底是怎么实现的呢？
+
+{% highlight c++ linenos %}
+// Define MemoryBarrier() if available
+// Windows on x86
+#if defined(OS_WIN) && defined(COMPILER_MSVC) && defined(ARCH_CPU_X86_FAMILY)
+// windows.h already provides a MemoryBarrier(void) macro
+// http://msdn.microsoft.com/en-us/library/ms684208(v=vs.85).aspx
+#define LEVELDB_HAVE_MEMORY_BARRIER
+
+// Gcc on x86
+#elif defined(ARCH_CPU_X86_FAMILY) && defined(__GNUC__)
+inline void MemoryBarrier() {
+    // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
+    // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+    __asm__ __volatile__("" : : : "memory");
+}
+#define LEVELDB_HAVE_MEMORY_BARRIER
+
+// Sun Studio
+#elif defined(ARCH_CPU_X86_FAMILY) && defined(__SUNPRO_CC)
+inline void MemoryBarrier() {
+    // See http://gcc.gnu.org/ml/gcc/2003-04/msg01180.html for a discussion on
+    // this idiom. Also see http://en.wikipedia.org/wiki/Memory_ordering.
+    asm volatile("" : : : "memory");
+}
+#define LEVELDB_HAVE_MEMORY_BARRIER
+
+// Mac OS
+#elif defined(OS_MACOSX)
+inline void MemoryBarrier() {
+    OSMemoryBarrier();
+}
+#define LEVELDB_HAVE_MEMORY_BARRIER
+
+// ARM
+#elif defined(ARCH_CPU_ARM_FAMILY)
+typedef void (*LinuxKernelMemoryBarrierFunc)(void);
+LinuxKernelMemoryBarrierFunc pLinuxKernelMemoryBarrier __attribute__((weak)) =
+    (LinuxKernelMemoryBarrierFunc) 0xffff0fa0;
+    inline void MemoryBarrier() {
+        pLinuxKernelMemoryBarrier();
+    }
+#define LEVELDB_HAVE_MEMORY_BARRIER
+
+#endif
+{% endhighlight %}
+
+从这一些宏定义我们可以看到，在X86环境下，直接用一句内嵌汇编指令 `__asm__ __volatile__("" : : : "memory");` 就可以实现内存屏障。MacOS自带了内存屏障调用，请在MacOS下面`man atomic`查看，比较神奇的是ARM，它直接提供了一个内存地址（函数指针），指向内存屏障调用，关于这个请参考：[这里][kernel_helper]。另外，我再额外补充一下，GCC也提供一系列原子操作和内存屏障函数，例如[__sync_synchronize()][gcc_sync]
+
+另外说明一下，有些同学可能会有疑问，`Acquire_Load()` 和 `Release_Store()` 是两个函数调用，那里里面的指令怎么会跟上下文产生关系而可能被编译器优化呢？需要注意的是，这几个函数都是**inline**函数，编译器会根据具体情况，把**inline**编译成函数调用或者直接进行宏替换。因此，在C++编程中，千万不能把一个**inline**函数的地址传递给一个函数指针，或者是通过指向类的指针去调用**inline**函数，这些做法都有可能导致不可预知的错误（笔者以前有血的教训啊，程序莫名其妙的崩在一个函数调用上，最后发现调用的是一个**inline**函数，可能由于编译器优化的原因，**inline**函数被编译器替换成了宏，遇到导致调用了一个非法的地址）。
+
+接下来看另外一部分宏定义，如果系统不支持 **MemoryBarrier**，那么就去看是否有**cstdatomic**库，用**cstdatomic**来实现内存屏障。如果**cstdatomic**库也没有，那么很抱歉，编译失败，你得自己去为你的平台实现一套原子操作，**port_example.h**告诉了你该去为你的平台实现些什么接口。
+
+{% highlight c++ linenos %}
+// AtomicPointer based on <cstdatomic>
+#elif defined(LEVELDB_CSTDATOMIC_PRESENT)
+class AtomicPointer {
+    private:
+        std::atomic<void*> rep_;
+    public:
+        AtomicPointer() { }
+        explicit AtomicPointer(void* v) : rep_(v) { }
+        inline void* Acquire_Load() const {
+            return rep_.load(std::memory_order_acquire);
+        }
+        inline void Release_Store(void* v) {
+            rep_.store(v, std::memory_order_release);
+        }
+        inline void* NoBarrier_Load() const {
+            return rep_.load(std::memory_order_relaxed);
+        }
+        inline void NoBarrier_Store(void* v) {
+            rep_.store(v, std::memory_order_relaxed);
+        }
+};
+
+// We have neither MemoryBarrier(), nor <cstdatomic>
+#else
+#error Please implement AtomicPointer for this platform.
+{% endhighlight %}
+
+最后提一下，注意**AtomicPointer**的单参构造函数 `AtomicPointer(void *v)` 前面加了**explicit**关键字，这是C++程序员必须具备的基本素养之一。如果你还不知道**explicit**是干什么用了，请自行google之。leveldb的代码注释详尽，C++使用相当规范，仔细阅读可以从里面学到很多有用的C++编程技能。
+
+[kernel_helper]: https://www.kernel.org/doc/Documentation/arm/kernel_user_helpers.txt
+[gcc_sync]: http://www.cnblogs.com/FrankTan/archive/2010/12/11/1903377.html
+
+
+
+
+
+

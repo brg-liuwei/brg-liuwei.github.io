@@ -1,0 +1,79 @@
+---
+layout: post
+title: "和我一起学习leveldb [2 port目录(续)]"
+date: 2014-10-15
+categories: tech
+---
+
+上一篇我们讨论了**atomic_pointer**，这篇我们讨论剩下的 **port_xxx.x** 文件。leveldb在**port_posix.h**中实现了**Snappy_Compress**, **Snappy_GetUncompressedLength**, **Snappy_Uncompress**三个函数。我们知道，**Snappy**是Google自己开发的压缩包，这里是为在支持Snappy的环境下使用Snappy压缩。关于Snappy这款压缩神器，有兴趣的同学请看[这里][snappy_github]。另外这个文件中还实现了**GetHeapProfile**函数，这个应该是跟google的性能测试工具[**gperftools**][gperftools_google]相关的接口。附带说一句，[**gperftools**][gperftools_google]是Google的一款重量级神器，里面有很多性能分析工具，还有目前最快的通用内存分配工具**tcmalloc**，如果能够把这个包使用熟练了，你将会有飞一般的感觉！关于中文版使用指南，请看[这里][gperftools_taobao]
+
+好了，言归正传，**port_posix.h**里面声明了**Mutex**和**CondVar**类，去**port_posix.cc**看实现，其实是把**pthread**调用封装了C++，这段代码在技术上是很容易看懂的，重要的是，从这里去学习C++编程思想，记得[酷壳网][coolshell]的陈皓老师说过，绝大部分写C++的程序员，其实都是在用C++的语法来写C。就我个人而言，感觉C++太难（如果你不相信C++巨难，请看[这里][21daycpp]），也许能通过这次学习leveldb，长一点见识吧。
+
+下面贴一下Mutex的代码：
+{% highlight c++ linenos %}
+class Mutex {
+    public:
+        Mutex();
+        ~Mutex();
+
+        void Lock();
+        void Unlock();
+        void AssertHeld() { }
+
+    private:
+        friend class CondVar;
+        pthread_mutex_t mu_;
+
+        // No copying
+        Mutex(const Mutex&);
+        void operator=(const Mutex&);
+};
+{% endhighlight %}
+
+注意这里的Mutex类的声明，最后两行，声明了默认构造函数和重载等号，而在实际实现之中，却不会去实现这两个函数。这也是一个C++的重要技巧。因为如果你不显式声明这两个函数，C++编译器会自动帮你隐式实现用自身作为参数的构造函数和等号操作（这是多么令人发指的可怕行为 **-_-!!**），不了解这一点的人往往以为C++可以用一个函数直接返回一个类（不是类的指针），其实根本不是这样的，诸如 
+
+{% highlight c++ %}
+MyObj GenMyObj() {
+    MyObj objToRet;
+    // do some stuff as follows:
+    // objToRet.xxx = xxx
+    return objToRet;
+}
+MyObj myobj = GenMyObj(); 
+{% endhighlight %}
+
+这样的代码，其实是编译器隐式帮你实现了一个**operator=**而已。那么，如果你要实现一个类，并且不允许被拷贝，你应该怎样去阻止编译器去隐式生成默认拷贝函数呢？
+
+对了，就是像**Mutex**那样，先去显式声明这两个函数，但是不去实现。这样，一旦你的代码中不小心出了个bug，导致了调用了类的拷贝函数，就会导致链接错误(注意，编译是可以通过的，但是如果编译器隐式调用了operator=或者Mutex(Mutex &)，就会导致在链接的时候找不到具体函数实现而报错)。
+
+**Mutex**的具体实现也是很有趣的：
+{% highlight c++ linenos %}
+static void PthreadCall(const char* label, int result) {
+    if (result != 0) {
+        fprintf(stderr, "pthread %s: %s\n", label, strerror(result));
+        abort();
+    }
+}
+
+Mutex::Mutex() { PthreadCall("init mutex", pthread_mutex_init(&mu_, NULL)); }
+
+Mutex::~Mutex() { PthreadCall("destroy mutex", pthread_mutex_destroy(&mu_)); }
+
+void Mutex::Lock() { PthreadCall("lock", pthread_mutex_lock(&mu_)); }
+
+void Mutex::Unlock() { PthreadCall("unlock", pthread_mutex_unlock(&mu_)); }
+{% endhighlight %}
+
+作者很巧妙地使用了一个辅助函数`PthreadCall(const char *, int)`，完成debug功能，方便调试。
+
+关于**CondVar**的实现，和**Mutex**方式一样，这里就不赘述了。
+
+关于**port_android**，除了**Mutex**和**CondVar**，另外还实现了**fread_unlocked**, **fwrite_unlocked**, **fflush_unlocked**, 以及 **fdatasync** 四个函数。这里几个xxx_unlocked函数的实现，是直接调用了**fread/fwrite/fflush** (注意，在**unix**系统中，**stdio**库的**fread/fwrite**等函数内部是有锁的，这是因为其内部使用了缓冲区的原因)，估计是因为**android**上的**fread/fwrite/fflush**函数是无锁的，或者是在该平台上是单线程，因此可以直接调用**fread/fwrite/fflush**，关于**Android**平台我不懂，因此也不敢乱讲，如果有知道这个原因的朋友，请联系我告知原因，谢谢。
+
+至此，port目录就已经全部分析完毕，接下来我们将分析util目录，在这里，你将会看到各种各样的神奇数据结构和算法。
+
+[snappy_github]: https://github.com/google/snappy
+[gperftools_google]: https://code.google.com/p/gperftools/
+[gperftools_taobao]: http://www.searchtb.com/2012/12/google-cpu-profiler.html
+[coolshell]: http://coolshell.cn/
+[21daycpp]: http://coolshell.cn/articles/2250.html

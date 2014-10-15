@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>和我一起学习leveldb [2 port目录(续)]</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/15/leveldb-2.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [2 port目录(续)]</h1>
+    <p class="post-meta">Oct 15, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>上一篇我们讨论了<strong>atomic_pointer</strong>，这篇我们讨论剩下的 <strong>port_xxx.x</strong> 文件。leveldb在<strong>port_posix.h</strong>中实现了<strong>Snappy_Compress</strong>, <strong>Snappy_GetUncompressedLength</strong>, <strong>Snappy_Uncompress</strong>三个函数。我们知道，<strong>Snappy</strong>是Google自己开发的压缩包，这里是为在支持Snappy的环境下使用Snappy压缩。关于Snappy这款压缩神器，有兴趣的同学请看<a href="https://github.com/google/snappy">这里</a>。另外这个文件中还实现了<strong>GetHeapProfile</strong>函数，这个应该是跟google的性能测试工具<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>相关的接口。附带说一句，<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>是Google的一款重量级神器，里面有很多性能分析工具，还有目前最快的通用内存分配工具<strong>tcmalloc</strong>，如果能够把这个包使用熟练了，你将会有飞一般的感觉！关于中文版使用指南，请看<a href="http://www.searchtb.com/2012/12/google-cpu-profiler.html">这里</a></p>
+
+<p>好了，言归正传，<strong>port_posix.h</strong>里面声明了<strong>Mutex</strong>和<strong>CondVar</strong>类，去<strong>port_posix.cc</strong>看实现，其实是把<strong>pthread</strong>调用封装了C++，这段代码在技术上是很容易看懂的，重要的是，从这里去学习C++编程思想，记得<a href="http://coolshell.cn/">酷壳网</a>的陈皓老师说过，绝大部分写C++的程序员，其实都是在用C++的语法来写C。就我个人而言，感觉C++太难（如果你不相信C++巨难，请看<a href="http://coolshell.cn/articles/2250.html">这里</a>），也许能通过这次学习leveldb，长一点见识吧。</p>
+
+<p>下面贴一下Mutex的代码：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">class</span> <span class="nc">Mutex</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 3</span>         <span class="n">Mutex</span><span class="p">();</span>
+<span class="lineno"> 4</span>         <span class="o">~</span><span class="n">Mutex</span><span class="p">();</span>
+<span class="lineno"> 5</span> 
+<span class="lineno"> 6</span>         <span class="kt">void</span> <span class="nf">Lock</span><span class="p">();</span>
+<span class="lineno"> 7</span>         <span class="kt">void</span> <span class="nf">Unlock</span><span class="p">();</span>
+<span class="lineno"> 8</span>         <span class="kt">void</span> <span class="nf">AssertHeld</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="k">private</span><span class="o">:</span>
+<span class="lineno">11</span>         <span class="k">friend</span> <span class="k">class</span> <span class="nc">CondVar</span><span class="p">;</span>
+<span class="lineno">12</span>         <span class="kt">pthread_mutex_t</span> <span class="n">mu_</span><span class="p">;</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>         <span class="c1">// No copying</span>
+<span class="lineno">15</span>         <span class="n">Mutex</span><span class="p">(</span><span class="k">const</span> <span class="n">Mutex</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">16</span>         <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Mutex</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">17</span> <span class="p">};</span></code></pre></div>
+
+<p>注意这里的Mutex类的声明，最后两行，声明了默认构造函数和重载等号，而在实际实现之中，却不会去实现这两个函数。这也是一个C++的重要技巧。因为如果你不显式声明这两个函数，C++编译器会自动帮你隐式实现用自身作为参数的构造函数和等号操作（这是多么令人发指的可怕行为 <strong>-_-!!</strong>），不了解这一点的人往往以为C++可以用一个函数直接返回一个类（不是类的指针），其实根本不是这样的，诸如 </p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="n">MyObj</span> <span class="nf">GenMyObj</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">MyObj</span> <span class="n">objToRet</span><span class="p">;</span>
+    <span class="c1">// do some stuff as follows:</span>
+    <span class="c1">// objToRet.xxx = xxx</span>
+    <span class="k">return</span> <span class="n">objToRet</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">MyObj</span> <span class="n">myobj</span> <span class="o">=</span> <span class="n">GenMyObj</span><span class="p">();</span></code></pre></div>
+
+<p>这样的代码，其实是编译器隐式帮你实现了一个<strong>operator=</strong>而已。那么，如果你要实现一个类，并且不允许被拷贝，你应该怎样去阻止编译器去隐式生成默认拷贝函数呢？</p>
+
+<p>对了，就是像<strong>Mutex</strong>那样，先去显式声明这两个函数，但是不去实现。这样，一旦你的代码中不小心出了个bug，导致了调用了类的拷贝函数，就会导致链接错误(注意，编译是可以通过的，但是如果编译器隐式调用了operator=或者Mutex(Mutex &amp;)，就会导致在链接的时候找不到具体函数实现而报错)。</p>
+
+<p><strong>Mutex</strong>的具体实现也是很有趣的：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="kt">void</span> <span class="nf">PthreadCall</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">label</span><span class="p">,</span> <span class="kt">int</span> <span class="n">result</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>         <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;pthread %s: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">result</span><span class="p">));</span>
+<span class="lineno"> 4</span>         <span class="n">abort</span><span class="p">();</span>
+<span class="lineno"> 5</span>     <span class="p">}</span>
+<span class="lineno"> 6</span> <span class="p">}</span>
+<span class="lineno"> 7</span> 
+<span class="lineno"> 8</span> <span class="n">Mutex</span><span class="o">::</span><span class="n">Mutex</span><span class="p">()</span> <span class="p">{</span> <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;init mutex&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span> <span class="p">}</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span> <span class="n">Mutex</span><span class="o">::~</span><span class="n">Mutex</span><span class="p">()</span> <span class="p">{</span> <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;destroy mutex&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_destroy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span> <span class="p">}</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span> <span class="kt">void</span> <span class="n">Mutex</span><span class="o">::</span><span class="n">Lock</span><span class="p">()</span> <span class="p">{</span> <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;lock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_lock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span> <span class="p">}</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span> <span class="kt">void</span> <span class="n">Mutex</span><span class="o">::</span><span class="n">Unlock</span><span class="p">()</span> <span class="p">{</span> <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;unlock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span> <span class="p">}</span></code></pre></div>
+
+<p>作者很巧妙地使用了一个辅助函数<code>PthreadCall(const char *, int)</code>，完成debug功能，方便调试。</p>
+
+<p>关于<strong>CondVar</strong>的实现，和<strong>Mutex</strong>方式一样，这里就不赘述了。</p>
+
+<p>关于<strong>port_android</strong>，除了<strong>Mutex</strong>和<strong>CondVar</strong>，另外还实现了<strong>fread_unlocked</strong>, <strong>fwrite_unlocked</strong>, <strong>fflush_unlocked</strong>, 以及 <strong>fdatasync</strong> 四个函数。这里几个xxx_unlocked函数的实现，是直接调用了<strong>fread/fwrite/fflush</strong> (注意，在<strong>unix</strong>系统中，<strong>stdio</strong>库的<strong>fread/fwrite</strong>等函数内部是有锁的，这是因为其内部使用了缓冲区的原因)，估计是因为<strong>android</strong>上的<strong>fread/fwrite/fflush</strong>函数是无锁的，或者是在该平台上是单线程，因此可以直接调用<strong>fread/fwrite/fflush</strong>，关于<strong>Android</strong>平台我不懂，因此也不敢乱讲，如果有知道这个原因的朋友，请联系我告知原因，谢谢。</p>
+
+<p>至此，port目录就已经全部分析完毕，接下来我们将分析util目录，在这里，你将会看到各种各样的神奇数据结构和算法。</p>
+
+
+  </article>
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
