@@ -1,0 +1,51 @@
+---
+layout: post
+title: "和我一起学习leveldb [3 util]"
+date: 2014-10-16
+categories: tech
+---
+
+leveldb源码的util中，实现了许多leveldb需要使用的工具，我们先来看一下代码结构(不包含测试代码)：
+
+    util
+      |
+      +--- arena.h         <=== arena是一个用于内存分配的环形缓冲区
+      +--- arena.cc
+      |
+      +--- bloom.cc        <=== bloom filter (布隆过滤器)
+      |
+      +--- cache.cc        <=== LRUCache实现(头文件: include/leveldb/cache.h)
+      |
+      +--- coding.h        <=== 数字编码的实现(如变长编码)
+      +--- coding.cc
+      |
+      +--- comparator.cc   <=== 比较器(头文件: include/leveldb/comparator.h)
+      |
+      +--- crc32c.h        <=== crc32 hash算法，本系列文章不予分析
+      +--- crc32c.cc
+      |
+      +--- env.cc          <=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
+      +--- env_posix.cc    <=== 基于posix实现的具体运行环境
+      |
+      +--- filter_policy.cc  <=== filter, (头文件: include/leveldb/filter_policy.h)
+      |
+      +--- hash.h            <=== hash函数，具体的实现类似murmur hash
+      +--- hash.cc
+      |
+      +--- histogram.cc      <=== 直方图，提供给性能评测工具使用
+      +--- histogram.h
+      |
+      +--- logging.h         <=== 用于保证写消息不丢的日志(非可读日志)
+      +--- logging.cc
+      |
+      +--- mutexlock.h       <=== 封装Mutex
+      |
+      +--- options.cc        <=== 数据库的属性选项(头文件: include/leveldb/options.h)
+      |
+      +--- posix_logger.h    <=== 系统运行日志(可读日志，跟上面的logging无关)
+      |
+      +--- random.h          <=== 一个简单的随机数生成器
+      |
+      +--- status.cc         <=== leveldb读写API的返回状态(头文件: include/leveldb/status.h)
+
+

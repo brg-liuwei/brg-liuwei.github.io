@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "和我一起学习leveldb [1 port目录]"
+title: "和我一起学习leveldb [1 port]"
 date: 2014-10-15
 categories: tech
 ---

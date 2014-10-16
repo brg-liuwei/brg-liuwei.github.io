@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>Blog of Finesse</title>
+    <title>和我一起学习leveldb [3 util]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
     <link rel="stylesheet" href="/css/main.css">
-    <link rel="canonical" href="http://someaddr.com/">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/16/leveldb-3.html">
 </head>
 
 
@@ -54,63 +54,60 @@
 
     <div class="page-content">
       <div class="wrapper">
-        <div class="home">
+        <div class="post">
 
-  <h1 class="page-heading">Declarer will ofter score another, if his honor you don't cover</h1>
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [3 util]</h1>
+    <p class="post-meta">Oct 16, 2014</p>
+  </header>
 
-  <ul class="post-list">
-    
-      <li>
-        <span class="post-meta">Oct 16, 2014</span>
+  <article class="post-content">
+    <p>leveldb源码的util中，实现了许多leveldb需要使用的工具，我们先来看一下代码结构(不包含测试代码)：</p>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/16/leveldb-3.html">和我一起学习leveldb [3 util]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
+<pre><code>util
+  |
+  +--- arena.h         &lt;=== arena是一个用于内存分配的环形缓冲区
+  +--- arena.cc
+  |
+  +--- bloom.cc        &lt;=== bloom filter (布隆过滤器)
+  |
+  +--- cache.cc        &lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
+  |
+  +--- coding.h        &lt;=== 数字编码的实现(如变长编码)
+  +--- coding.cc
+  |
+  +--- comparator.cc   &lt;=== 比较器(头文件: include/leveldb/comparator.h)
+  |
+  +--- crc32c.h        &lt;=== crc32 hash算法，本系列文章不予分析
+  +--- crc32c.cc
+  |
+  +--- env.cc          &lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
+  +--- env_posix.cc    &lt;=== 基于posix实现的具体运行环境
+  |
+  +--- filter_policy.cc  &lt;=== filter, (头文件: include/leveldb/filter_policy.h)
+  |
+  +--- hash.h            &lt;=== hash函数，具体的实现类似murmur hash
+  +--- hash.cc
+  |
+  +--- histogram.cc      &lt;=== 直方图，提供给性能评测工具使用
+  +--- histogram.h
+  |
+  +--- logging.h         &lt;=== 用于保证写消息不丢的日志(非可读日志)
+  +--- logging.cc
+  |
+  +--- mutexlock.h       &lt;=== 封装Mutex
+  |
+  +--- options.cc        &lt;=== 数据库的属性选项(头文件: include/leveldb/options.h)
+  |
+  +--- posix_logger.h    &lt;=== 系统运行日志(可读日志，跟上面的logging无关)
+  |
+  +--- random.h          &lt;=== 一个简单的随机数生成器
+  |
+  +--- status.cc         &lt;=== leveldb读写API的返回状态(头文件: include/leveldb/status.h)
+</code></pre>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-2.html">和我一起学习leveldb [2 port(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-1.html">和我一起学习leveldb [1 port]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-0.html">和我一起学习leveldb [0 源码结构]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 14, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/14/twemproxy-macro.html">提升C程序员的逼格：从twemproxy源码学习宏定义技巧</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Sep 29, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/09/29/snprintf.html">误用snprintf导致的bug</a>
-        </h2>
-      </li>
-    
-  </ul>
-
-  <p class="rss-subscribe">subscribe <a href="/feed.xml">via RSS</a></p>
+  </article>
 
 </div>
 
