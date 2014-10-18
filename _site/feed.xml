@@ -6,8 +6,8 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Thu, 16 Oct 2014 13:29:15 +0800</pubDate>
-    <lastBuildDate>Thu, 16 Oct 2014 13:29:15 +0800</lastBuildDate>
+    <pubDate>Sat, 18 Oct 2014 16:41:12 +0800</pubDate>
+    <lastBuildDate>Sat, 18 Oct 2014 16:41:12 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -16,28 +16,36 @@
 
 &lt;pre&gt;&lt;code&gt;util
   |
-  +--- arena.h         &amp;lt;=== arena是一个用于内存分配的环形缓冲区
-  +--- arena.cc
+  +--- random.h          &amp;lt;=== 一个简单的随机数生成器
   |
-  +--- bloom.cc        &amp;lt;=== bloom filter (布隆过滤器)
+  +--- status.cc         &amp;lt;=== leveldb读写API的返回状态(头文件: include/leveldb/status.h)
   |
-  +--- cache.cc        &amp;lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
-  |
-  +--- coding.h        &amp;lt;=== 数字编码的实现(如变长编码)
-  +--- coding.cc
-  |
-  +--- comparator.cc   &amp;lt;=== 比较器(头文件: include/leveldb/comparator.h)
-  |
-  +--- crc32c.h        &amp;lt;=== crc32 hash算法，本系列文章不予分析
+  +--- crc32c.h          &amp;lt;=== crc32 hash算法，本系列文章不予分析
   +--- crc32c.cc
-  |
-  +--- env.cc          &amp;lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
-  +--- env_posix.cc    &amp;lt;=== 基于posix实现的具体运行环境
-  |
-  +--- filter_policy.cc  &amp;lt;=== filter, (头文件: include/leveldb/filter_policy.h)
   |
   +--- hash.h            &amp;lt;=== hash函数，具体的实现类似murmur hash
   +--- hash.cc
+  |
+  +--- mutexlock.h       &amp;lt;=== 封装Mutex
+  |
+  +--- options.cc        &amp;lt;=== 数据库的属性选项(头文件: include/leveldb/options.h)
+  |
+  +--- arena.h           &amp;lt;=== arena是一个用于内存分配的环形缓冲区
+  +--- arena.cc
+  |
+  +--- bloom.cc          &amp;lt;=== bloom filter (布隆过滤器)
+  |
+  +--- cache.cc          &amp;lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
+  |
+  +--- coding.h          &amp;lt;=== 数字编码的实现(如变长编码)
+  +--- coding.cc
+  |
+  +--- comparator.cc     &amp;lt;=== 比较器(头文件: include/leveldb/comparator.h)
+  |
+  +--- env.cc            &amp;lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
+  +--- env_posix.cc      &amp;lt;=== 基于posix实现的具体运行环境
+  |
+  +--- filter_policy.cc  &amp;lt;=== filter, (头文件: include/leveldb/filter_policy.h)
   |
   +--- histogram.cc      &amp;lt;=== 直方图，提供给性能评测工具使用
   +--- histogram.h
@@ -45,16 +53,88 @@
   +--- logging.h         &amp;lt;=== 用于保证写消息不丢的日志(非可读日志)
   +--- logging.cc
   |
-  +--- mutexlock.h       &amp;lt;=== 封装Mutex
-  |
-  +--- options.cc        &amp;lt;=== 数据库的属性选项(头文件: include/leveldb/options.h)
-  |
   +--- posix_logger.h    &amp;lt;=== 系统运行日志(可读日志，跟上面的logging无关)
-  |
-  +--- random.h          &amp;lt;=== 一个简单的随机数生成器
-  |
-  +--- status.cc         &amp;lt;=== leveldb读写API的返回状态(头文件: include/leveldb/status.h)
 &lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;我们还是先从简单的开始入手分析，大骨头留在后面啃。先看status，status类用于存放数据库操作返回状态，这个类的私有成员变量仅仅是一个&lt;code&gt;const char *_state;&lt;/code&gt;，它存储的数据结构如下：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;             +---------------------+----------------+--------------
+  _state --&amp;gt; | msg_len 4B uint32_t | 1B status code | message ...
+             +---------------------+----------------+--------------
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;其中，状态码的编码是：&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;enum&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Code&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;2&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kOk&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;3&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kNotFound&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;4&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kCorruption&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;5&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kNotSupported&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;6&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kInvalidArgument&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;4&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;,&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;7&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;kIOError&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;5&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;8&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;这个类简单清晰易懂，不需要花费太多口舌，最后再提一点，这个类的operator=的实现，考虑了自己赋值给自己的问题，细节考虑非常到位！类似自我赋值的问题，往往是我们在工程编码中容易疏忽的。&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;kr&quot;&gt;inline&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;operator&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Status&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;2&lt;/span&gt;   &lt;span class=&quot;c1&quot;&gt;// The following condition catches both aliasing (when this == &amp;amp;s),&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;3&lt;/span&gt;   &lt;span class=&quot;c1&quot;&gt;// and the common case where both s and *this are ok.&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;4&lt;/span&gt;   &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;5&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;delete&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;[]&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;6&lt;/span&gt;     &lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;?&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;CopyState&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;state_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;7&lt;/span&gt;   &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;8&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;接下来我们分析MutexLock(util/mutexlock.h)，前一篇中讨论port中的mutex，权且是这里的一个引子：&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt; 1&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;/*&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 2&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt; Typical usage:&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 3&lt;/span&gt; 
+&lt;span class=&quot;lineno&quot;&gt; 4&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;   void MyClass::MyMethod() {&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 5&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;     // do some thing before lock&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 6&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;     // Lock&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 7&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;     {&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 8&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;         MutexLock l(&amp;amp;mu_);       // mu_ is an instance variable&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 9&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;         // ... some complex code, possibly with multiple return paths ...&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;10&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;     }&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;11&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;     // do some thing after lock&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;12&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;   }&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;13&lt;/span&gt; &lt;span class=&quot;cm&quot;&gt;*/&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;14&lt;/span&gt; 
+&lt;span class=&quot;lineno&quot;&gt;15&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;class&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MutexLock&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;16&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;public&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;17&lt;/span&gt;         &lt;span class=&quot;k&quot;&gt;explicit&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;MutexLock&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;port&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Mutex&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;mu&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mu_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;mu&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;18&lt;/span&gt;             &lt;span class=&quot;k&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;mu_&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Lock&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;19&lt;/span&gt;         &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;20&lt;/span&gt;         &lt;span class=&quot;o&quot;&gt;~&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;MutexLock&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;this&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;mu_&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Unlock&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;();&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;21&lt;/span&gt; 
+&lt;span class=&quot;lineno&quot;&gt;22&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;private&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;:&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;23&lt;/span&gt;         &lt;span class=&quot;n&quot;&gt;port&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Mutex&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;mu_&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;24&lt;/span&gt;         &lt;span class=&quot;c1&quot;&gt;// No copying allowed&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;25&lt;/span&gt;         &lt;span class=&quot;n&quot;&gt;MutexLock&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;MutexLock&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;26&lt;/span&gt;         &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;operator&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;MutexLock&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;&amp;amp;&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;27&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;代码很简洁，利用C++构造函数和析构函数的特性完成加锁和解锁。注意上面的代码中我在原作的注释中做了一点点小修改，我把MutexLock l变量放在了一个单独的花括号块中，于是l的生命周期就存在于这个花括号块中，当执行到花括号结束，l的析构函数就会被自动调用，即完成解锁。这种利用C++的特性完成的加锁解锁，保证了不会出错。例如这段逻辑中如果会包含很多错误处理分支，有各种return, break, goto等等，那么如果以C的方式去写，就会在很多地方去解锁，分支一多，就有可能忘记解锁出现bug（所以写C代码就很容易在多分支出现的时候忘记解锁、释放内存、关闭文件、释放ipc资源等等问题）。另外值得一提的是，Google近几年刚推出的Go语言，直接从语言级提供了一个关键字defer来解决这个问题，不过defer的作用域是函数而不是代码块，因此在Go中如果要用类似的方式，对函数内部的一小段临界区加锁，需要使用一个闭包（匿名函数）来代替代码块。&lt;/p&gt;
+
+&lt;p&gt;另外，util中的&lt;strong&gt;hash.h/hash.cc&lt;/strong&gt;是&lt;a href=&quot;http://en.wikipedia.org/wiki/MurmurHash&quot;&gt;murmur&lt;/a&gt;的类似算法实现，murmur hash用得很广泛，像redis,nginx这些鼎鼎大名的开源软件都用到了它(所以以后你要是需要使用hash函数，不妨选择murmur使用，而不是动不动就去用md5/sha1这些开销比较高的hash函数)，不过我不知道leveldb为什么不直接使用这个算法，而是使用了一个类似的算法，估计是Google大牛多，人才济济，有人专门研究hash算法的效率吧。&lt;strong&gt;crc32.h/crc32.cc&lt;/strong&gt;是标准的crc32，也没有什么可说的。&lt;strong&gt;random.h&lt;/strong&gt;是leveldb自带的随机数发生器，实现了一些比较有趣的功能，例如&lt;code&gt;Skewed(int max_log)&lt;/code&gt;，这个函数随机返回[0, 2^(max_log-1)]区间中的一个2的指数值(Uniform(max_log + 1)返回0到max_log，而1«x的值是[2^0, 2^(x-1)]区间中的一个2的幂). &lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt; 1&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// Returns a uniformly distributed value in the range [0..n-1]&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 2&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// REQUIRES: n &amp;gt; 0&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 3&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;uint32_t&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;Uniform&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Next&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 4&lt;/span&gt; 
+&lt;span class=&quot;lineno&quot;&gt; 5&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// Skewed: pick &amp;quot;base&amp;quot; uniformly from range [0,max_log] and then&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 6&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// return &amp;quot;base&amp;quot; random bits.  The effect is to pick a number in the&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 7&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// range [0,2^max_log-1] with exponential bias towards smaller numbers.&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 8&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;uint32_t&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;Skewed&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;int&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;max_log&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt; 9&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Uniform&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;Uniform&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;max_log&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;));&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;10&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;strong&gt;options.h/options.cc&lt;/strong&gt;是用来存放数据库打开关闭读写的一些选项，其中各个具体的选项将在以后对数据库的分析中谈及，这里也就一笔带过。&lt;strong&gt;Histogram.h/Histogram.cc&lt;/strong&gt;是用于统计的直方图，里面涉及了一些算标准差、斜率之类的简单数学，这个类是用于给一些benchmark提供一个统计工具，跟leveldb本身是无关的，所以这里也就不作分析了。&lt;/p&gt;
+
+&lt;p&gt;本篇对util整体做了个大致的介绍，然后分析了其中的一些比较简单的类。接下来我们将讨论布隆过滤器，变长整数编码，leveldb的内置cache，抽象运行环境已经非常非常重要的用以保证数据不丢的日志。&lt;/p&gt;
+
+&lt;p&gt;亲爱的童鞋们，如果你们觉得这个系列写得还不错，一定要记住把&lt;a href=&quot;http://brg-liuwei.github.io&quot;&gt;本博客的地址&lt;/a&gt;，并到&lt;a href=&quot;https://github.com/brg-liuwei/brg-liuwei.github.io&quot;&gt;这里&lt;/a&gt;来帮我加一颗小星星哦~&lt;/p&gt;
 
 </description>
         <pubDate>Thu, 16 Oct 2014 00:00:00 +0800</pubDate>
