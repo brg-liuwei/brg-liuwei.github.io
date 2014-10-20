@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>和我一起学习leveldb [4 util (续)]</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/20/leveldb-4.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [4 util (续)]</h1>
+    <p class="post-meta">Oct 20, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>这一篇我们先来讨论<strong>coding.h/coding.cc</strong>，leveldb作者在这两个文件中实现了整数编码，总体来说是非常简洁直观的。其中Fixed32/Fixed64是定长的32/64位整数编码。实现非常简单：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">void</span> <span class="nf">EncodeFixed32</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span> <span class="n">buf</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span> <span class="cp">#if __BYTE_ORDER == __LITTLE_ENDIAN</span>
+<span class="lineno"> 3</span>     <span class="n">memcpy</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">value</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">value</span><span class="p">));</span>
+<span class="lineno"> 4</span> <span class="cp">#else</span>
+<span class="lineno"> 5</span>     <span class="n">buf</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">;</span>
+<span class="lineno"> 6</span>     <span class="n">buf</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">;</span>
+<span class="lineno"> 7</span>     <span class="n">buf</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">16</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">;</span>
+<span class="lineno"> 8</span>     <span class="n">buf</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">value</span> <span class="o">&gt;&gt;</span> <span class="mi">24</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">;</span>
+<span class="lineno"> 9</span> <span class="cp">#endif</span>
+<span class="lineno">10</span> <span class="p">}</span></code></pre></div>
+
+<p>32位整数，编码成4个字节的整数，如果是小尾顺序(及低地址存低字节)，那么就直接memcpy到字符数组中，如果是大尾顺序，就做一下处理。再来看Fixed32的解码：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kr">inline</span> <span class="kt">uint32_t</span> <span class="nf">DecodeFixed32</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">ptr</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">if</span> <span class="p">(</span><span class="n">port</span><span class="o">::</span><span class="n">kLittleEndian</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>         <span class="c1">// Load the raw bytes</span>
+<span class="lineno"> 4</span>         <span class="kt">uint32_t</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno"> 5</span>         <span class="n">memcpy</span><span class="p">(</span><span class="o">&amp;</span><span class="n">result</span><span class="p">,</span> <span class="n">ptr</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">result</span><span class="p">));</span>  <span class="c1">// gcc optimizes this to a plain load</span>
+<span class="lineno"> 6</span>         <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno"> 7</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno"> 8</span>         <span class="cm">/* 注意这里先要强制转换成unsigned char，char是有符号的，直接转成整数可能出问题 */</span>
+<span class="lineno"> 9</span>         <span class="k">return</span> <span class="p">((</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">[</span><span class="mi">0</span><span class="p">])))</span>
+<span class="lineno">10</span>                 <span class="o">|</span> <span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span>
+<span class="lineno">11</span>                 <span class="o">|</span> <span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span> <span class="o">&lt;&lt;</span> <span class="mi">16</span><span class="p">)</span>
+<span class="lineno">12</span>                 <span class="o">|</span> <span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint32_t</span><span class="o">&gt;</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span> <span class="o">&lt;&lt;</span> <span class="mi">24</span><span class="p">));</span>
+<span class="lineno">13</span>     <span class="p">}</span>
+<span class="lineno">14</span> <span class="p">}</span></code></pre></div>
+
+<p>请注意这里字符转换的细节问题，我已经在第8行加了注释说明。这里要说明一下，问起char的取值范围，很多同学都以为是0~255，其实char是有符号的，所以char的取值范围应该是-128~127。实践中进行类型转换(例如char转成int)时，一定要注意考虑这里面的问题。</p>
+
+<p>接下来再讲一下对整数的变长编码。我们知道，如果要序列化一个字符串，最简单直观的想法就是，先在头部用几个字节存放字符串的长度，再在后面跟真正的字符串的值。如果用uint32表示长度，那么是不是一定需要用4个字节存储呢？实际上，往往我们存储的字符串的长度可能就是几十或者一百多，如果是这样，那么一两个字节就可以表示了，没必要一定要占用4个字节，基于此，就有了变长整数编码(<strong>thrift</strong>中的<strong>CompactProtocol</strong>也是用这种方式来存储变长整数的)，另外，变长整数编码技术还被广泛用于搜索之中，一个很常见的场景就是搜索引擎中倒排拉链。关于更高级的话题，可以参考<a href="http://www.searchtb.com/2011/07/doclist-compress.html">DocList压缩方法简介</a>。好了，废话不多说，我们还是回过头来看看leveldb中的varint，其实很简单，就是每个Byte用最高位bit的0/1值表示该整数是否结束，用剩余的7bit存储实际的数值。因此，[0, 2^7 - 1]区间的无符号整数只需要用一个Byte来存储，[0, 2^14 - 1]区间的无符号整数用两个Byte存储。</p>
+
+<pre><code>变长整数存储示意图：
+1001 0001  1000 1001 0111 1100
+^          ^         ^          A: 第一字节，最高位是1，表示未结束，实际值是 001 0001
+|          |         |          B: 第二字节，最高位是1，表示未结束，实际值是 000 1001
+A          B         C          C: 第三字节，最高位是0，表示结束，  实际值是 111 1100
+因此，三个字节拼接成: 
+[001 0001][000 1001][111 1100]
+    = [17] * (2^7)^2 + [9] * (2^7)^1 + [124] * (2^7)^0
+    = 278528 + 1152 + 124
+    = 279804
+</code></pre>
+
+<p>把这个结构看明白了，再来看代码就一目了然：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">EncodeVarint32</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span> <span class="n">dst</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">v</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="c1">// Operate on characters as unsigneds</span>
+<span class="lineno"> 3</span>     <span class="kt">unsigned</span> <span class="kt">char</span><span class="o">*</span> <span class="n">ptr</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">dst</span><span class="p">);</span>
+<span class="lineno"> 4</span>     <span class="k">static</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">B</span> <span class="o">=</span> <span class="mi">128</span><span class="p">;</span>
+<span class="lineno"> 5</span>     <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">7</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno"> 6</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span><span class="p">;</span>
+<span class="lineno"> 7</span>     <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">14</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno"> 8</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno"> 9</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">7</span><span class="p">;</span>
+<span class="lineno">10</span>     <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">21</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">11</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">12</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">7</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">13</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">14</span><span class="p">;</span>
+<span class="lineno">14</span>     <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">v</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">28</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">15</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">16</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">7</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">17</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">14</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">18</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">21</span><span class="p">;</span>
+<span class="lineno">19</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">20</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">21</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">7</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">22</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">14</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">23</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">21</span><span class="p">)</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">24</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="n">v</span><span class="o">&gt;&gt;</span><span class="mi">28</span><span class="p">;</span>
+<span class="lineno">25</span>     <span class="p">}</span>
+<span class="lineno">26</span>     <span class="k">return</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<span class="lineno">27</span> <span class="p">}</span>
+<span class="lineno">28</span> 
+<span class="lineno">29</span> <span class="cm">/* varint64和varint32其实是同样的原理，</span>
+<span class="lineno">30</span> <span class="cm">   不过两种实现的代码不一样而已，一个直观，一个简洁 */</span>
+<span class="lineno">31</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">EncodeVarint64</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span> <span class="n">dst</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">v</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">32</span>     <span class="k">static</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">B</span> <span class="o">=</span> <span class="mi">128</span><span class="p">;</span>
+<span class="lineno">33</span>     <span class="kt">unsigned</span> <span class="kt">char</span><span class="o">*</span> <span class="n">ptr</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">dst</span><span class="p">);</span>
+<span class="lineno">34</span>     <span class="k">while</span> <span class="p">(</span><span class="n">v</span> <span class="o">&gt;=</span> <span class="n">B</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">35</span>         <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">v</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">B</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span> <span class="o">|</span> <span class="n">B</span><span class="p">;</span>
+<span class="lineno">36</span>         <span class="n">v</span> <span class="o">&gt;&gt;=</span> <span class="mi">7</span><span class="p">;</span>
+<span class="lineno">37</span>     <span class="p">}</span>
+<span class="lineno">38</span>     <span class="o">*</span><span class="p">(</span><span class="n">ptr</span><span class="o">++</span><span class="p">)</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">char</span><span class="o">&gt;</span><span class="p">(</span><span class="n">v</span><span class="p">);</span>
+<span class="lineno">39</span>     <span class="k">return</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<span class="lineno">40</span> <span class="p">}</span></code></pre></div>
+
+<p>另外不知道大家看到这里有没有发现一个很有趣的现象。EncodeVarint32和EncodeVarint64这两个函数，原理相同，但是作者用了两种不同的方式来实现。而前面的EncodeFixed32和EncodeFixed64，原理也是一样，而作者的实现方式不同，一个是使用了宏来判定大小端顺序，另一个则是使用了port中一个接口来判别大小端顺序，也许作者是想通过这种方式来展示各种技巧，秀一秀技术吧。最后谈一下GetVarint32PtrFallback这个函数，仔细阅读这段代码，就能看出来，这个函数是用于解析变长编码字符串的。先解码字符串首部的长度，并且返回指向字符串真实地址的指针。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="nf">GetVarint32PtrFallback</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">p</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">limit</span><span class="p">,</span> <span class="kt">uint32_t</span><span class="o">*</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="kt">uint32_t</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 3</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">shift</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">shift</span> <span class="o">&lt;=</span> <span class="mi">28</span> <span class="o">&amp;&amp;</span> <span class="n">p</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">;</span> <span class="n">shift</span> <span class="o">+=</span> <span class="mi">7</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 4</span>         <span class="kt">uint32_t</span> <span class="n">byte</span> <span class="o">=</span> <span class="o">*</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="k">const</span> <span class="kt">unsigned</span> <span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">p</span><span class="p">));</span>
+<span class="lineno"> 5</span>         <span class="n">p</span><span class="o">++</span><span class="p">;</span>
+<span class="lineno"> 6</span>         <span class="k">if</span> <span class="p">(</span><span class="n">byte</span> <span class="o">&amp;</span> <span class="mi">128</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 7</span>             <span class="c1">// More bytes are present</span>
+<span class="lineno"> 8</span>             <span class="n">result</span> <span class="o">|=</span> <span class="p">((</span><span class="n">byte</span> <span class="o">&amp;</span> <span class="mi">127</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">shift</span><span class="p">);</span>
+<span class="lineno"> 9</span>         <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">10</span>             <span class="n">result</span> <span class="o">|=</span> <span class="p">(</span><span class="n">byte</span> <span class="o">&lt;&lt;</span> <span class="n">shift</span><span class="p">);</span>
+<span class="lineno">11</span>             <span class="o">*</span><span class="n">value</span> <span class="o">=</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">12</span>             <span class="k">return</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="k">const</span> <span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">p</span><span class="p">);</span>
+<span class="lineno">13</span>         <span class="p">}</span>
+<span class="lineno">14</span>     <span class="p">}</span>
+<span class="lineno">15</span>     <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">16</span> <span class="p">}</span></code></pre></div>
+
+<p>本篇最后讨论一下过滤器，include/leveldb/filter_policy.h和util/filter_policy.cc封装了一个过滤器策略类，鉴于源码中的注释比较多，我直接把注释清理掉后的源码贴出来，再附上一点讲解：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">namespace</span> <span class="n">leveldb</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">class</span> <span class="nc">Slice</span><span class="p">;</span>
+<span class="lineno"> 3</span>     <span class="k">class</span> <span class="nc">FilterPolicy</span> <span class="p">{</span>
+<span class="lineno"> 4</span>         <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 5</span>             <span class="k">virtual</span> <span class="o">~</span><span class="n">FilterPolicy</span><span class="p">();</span>
+<span class="lineno"> 6</span>             <span class="k">virtual</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Name</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 7</span>             <span class="k">virtual</span> <span class="kt">void</span> <span class="n">CreateFilter</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">keys</span><span class="p">,</span> <span class="kt">int</span> <span class="n">n</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">dst</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 8</span>             <span class="k">virtual</span> <span class="kt">bool</span> <span class="n">KeyMayMatch</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">filter</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 9</span>     <span class="p">};</span>
+<span class="lineno">10</span>     <span class="k">extern</span> <span class="k">const</span> <span class="n">FilterPolicy</span><span class="o">*</span> <span class="nf">NewBloomFilterPolicy</span><span class="p">(</span><span class="kt">int</span> <span class="n">bits_per_key</span><span class="p">);</span>
+<span class="lineno">11</span> <span class="p">}</span></code></pre></div>
+
+<p>FilterPolicy提供了三个接口，Name()返回具体实现的过滤器的名字。CreateFilter这个接口有两个参数，第一个参数是个Slice数组（Slice是一个简单的string实现，其中有两个成员变量，即<code>size_t size_</code>和<code>const char* data_</code>。之所以不直接用std::string，是为了在一些Slice复制的场景中，直接通过传递data_指针避免数据拷贝），第二个参数是Slice数组的size。这个函数把这个Slice数组中的所有key的信息以某种方式写入到dst中。那么写入到dst中有什么用呢？这当然就是用于给第三个接口KeyMayMatch啦。第三个接口是检验一个Slice是否在CreateFilter的第一个参数数组中的。如果key是在CreateFilter中的数组中，那么就返回true，如果不在，那么可能返回true(误判)，也可能返回false。<strong>Filter的作用就是：如果返回false，那么key就一定不在CreateFilter的keys中</strong>。这个特性在查找中非常有助于提高速度。关于bloomFilter，这里就不细说了，如果想了解详细情况，请看<a href="http://en.wikipedia.org/wiki/Bloom_filter">这里</a>。<strong>util/bloom.cc</strong>是FilterPolicy接口的一个具体实现，这里面的代码是写得很漂亮的，对误判率、hash函数等的选取都有讨论，从作者的注释中也能看出是参考了一些布隆过滤器在数学上的讨论的。读这段代码时，要注意作者把hash函数(<code>private: size_t k_;</code>)的数量写在dst的最后一个字节中，如果过滤器涉及到了扩容，那么就重新把k_写到新的过滤器结尾，而原来存放k_的byte则用于布隆过滤器存储bit值。关于这部分代码，这里就不贴出来了，有兴趣的同学可自行阅读之。</p>
+
+
+  </article>
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

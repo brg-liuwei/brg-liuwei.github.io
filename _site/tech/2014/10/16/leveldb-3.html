@@ -80,25 +80,25 @@
   |
   +--- options.cc        &lt;=== 数据库的属性选项(头文件: include/leveldb/options.h)
   |
-  +--- arena.h           &lt;=== arena是一个用于内存分配的环形缓冲区
-  +--- arena.cc
-  |
-  +--- bloom.cc          &lt;=== bloom filter (布隆过滤器)
-  |
-  +--- cache.cc          &lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
+  +--- histogram.cc      &lt;=== 直方图，提供给性能评测工具使用
+  +--- histogram.h
   |
   +--- coding.h          &lt;=== 数字编码的实现(如变长编码)
   +--- coding.cc
+  |
+  +--- filter_policy.cc  &lt;=== filter, (头文件: include/leveldb/filter_policy.h)
+  |
+  +--- bloom.cc          &lt;=== bloom filter (布隆过滤器)
+  |
+  +--- arena.h           &lt;=== arena是一个用于内存分配的环形缓冲区
+  +--- arena.cc
+  |
+  +--- cache.cc          &lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
   |
   +--- comparator.cc     &lt;=== 比较器(头文件: include/leveldb/comparator.h)
   |
   +--- env.cc            &lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
   +--- env_posix.cc      &lt;=== 基于posix实现的具体运行环境
-  |
-  +--- filter_policy.cc  &lt;=== filter, (头文件: include/leveldb/filter_policy.h)
-  |
-  +--- histogram.cc      &lt;=== 直方图，提供给性能评测工具使用
-  +--- histogram.h
   |
   +--- logging.h         &lt;=== 用于保证写消息不丢的日志(非可读日志)
   +--- logging.cc
@@ -167,7 +167,8 @@
 
 <p>代码很简洁，利用C++构造函数和析构函数的特性完成加锁和解锁。注意上面的代码中我在原作的注释中做了一点点小修改，我把MutexLock l变量放在了一个单独的花括号块中，于是l的生命周期就存在于这个花括号块中，当执行到花括号结束，l的析构函数就会被自动调用，即完成解锁。这种利用C++的特性完成的加锁解锁，保证了不会出错。例如这段逻辑中如果会包含很多错误处理分支，有各种return, break, goto等等，那么如果以C的方式去写，就会在很多地方去解锁，分支一多，就有可能忘记解锁出现bug（所以写C代码就很容易在多分支出现的时候忘记解锁、释放内存、关闭文件、释放ipc资源等等问题）。另外值得一提的是，Google近几年刚推出的Go语言，直接从语言级提供了一个关键字defer来解决这个问题，不过defer的作用域是函数而不是代码块，因此在Go中如果要用类似的方式，对函数内部的一小段临界区加锁，需要使用一个闭包（匿名函数）来代替代码块。</p>
 
-<p>另外，util中的<strong>hash.h/hash.cc</strong>是<a href="http://en.wikipedia.org/wiki/MurmurHash">murmur</a>的类似算法实现，murmur hash用得很广泛，像redis,nginx这些鼎鼎大名的开源软件都用到了它(所以以后你要是需要使用hash函数，不妨选择murmur使用，而不是动不动就去用md5/sha1这些开销比较高的hash函数)，不过我不知道leveldb为什么不直接使用这个算法，而是使用了一个类似的算法，估计是Google大牛多，人才济济，有人专门研究hash算法的效率吧。<strong>crc32.h/crc32.cc</strong>是标准的crc32，也没有什么可说的。<strong>random.h</strong>是leveldb自带的随机数发生器，实现了一些比较有趣的功能，例如<code>Skewed(int max_log)</code>，这个函数随机返回[0, 2^(max_log-1)]区间中的一个2的指数值(Uniform(max_log + 1)返回0到max_log，而1«x的值是[2^0, 2^(x-1)]区间中的一个2的幂). </p>
+<p>另外，util中的<strong>hash.h/hash.cc</strong>是<a href="http://en.wikipedia.org/wiki/MurmurHash">murmur</a>的类似算法实现，murmur hash用得很广泛，像redis,nginx这些鼎鼎大名的开源软件都用到了它(所以以后你要是需要使用hash函数，不妨选择murmur使用，而不是动不动就去用md5/sha1这些开销比较高的hash函数)，不过我不知道leveldb为什么不直接使用这个算法，而是使用了一个类似的算法，估计是Google大牛多，人才济济，有人专门研究hash算法的效率吧。
+<strong>crc32.h/crc32.cc</strong>是标准的crc32，也没有什么可说的。<strong>random.h</strong>是leveldb自带的随机数发生器，实现了一些比较有趣的功能，例如<code>Skewed(int max_log)</code>，这个函数随机返回[0, 2^(max_log-1)]区间中的一个2的指数值(Uniform(max_log + 1)返回0到max_log，而1«x的值是[2^0, 2^(x-1)]区间中的一个2的幂). </p>
 
 <div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// Returns a uniformly distributed value in the range [0..n-1]</span>
 <span class="lineno"> 2</span> <span class="c1">// REQUIRES: n &gt; 0</span>
@@ -182,9 +183,9 @@
 
 <p><strong>options.h/options.cc</strong>是用来存放数据库打开关闭读写的一些选项，其中各个具体的选项将在以后对数据库的分析中谈及，这里也就一笔带过。<strong>Histogram.h/Histogram.cc</strong>是用于统计的直方图，里面涉及了一些算标准差、斜率之类的简单数学，这个类是用于给一些benchmark提供一个统计工具，跟leveldb本身是无关的，所以这里也就不作分析了。</p>
 
-<p>本篇对util整体做了个大致的介绍，然后分析了其中的一些比较简单的类。接下来我们将讨论布隆过滤器，变长整数编码，leveldb的内置cache，抽象运行环境已经非常非常重要的用以保证数据不丢的日志。</p>
+<p>本篇对util整体做了个大致的介绍，然后分析了其中的一些比较简单的类。接下来我们将讨论变长整数编码，布隆过滤器，leveldb的内置cache，抽象运行环境已经非常非常重要的用以保证数据不丢的日志。</p>
 
-<p>亲爱的童鞋们，如果你们觉得这个系列写得还不错，一定要记住把<a href="http://brg-liuwei.github.io">本博客的地址</a>，并到<a href="https://github.com/brg-liuwei/brg-liuwei.github.io">这里</a>来帮我加一颗小星星哦~</p>
+<p>亲爱的童鞋们，如果你们觉得这个系列写得还不错，一定要记住把本博客的<a href="http://brg-liuwei.github.io">地址</a>加入到你的浏览器收藏夹中，并到<a href="https://github.com/brg-liuwei/brg-liuwei.github.io">这里</a>来帮我加一颗小星星哦~</p>
 
 
   </article>
