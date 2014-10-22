@@ -100,10 +100,10 @@
   +--- env.cc            &lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
   +--- env_posix.cc      &lt;=== 基于posix实现的具体运行环境
   |
-  +--- logging.h         &lt;=== 用于保证写消息不丢的日志(非可读日志)
+  +--- logging.h         &lt;=== 日志中的数据处理
   +--- logging.cc
   |
-  +--- posix_logger.h    &lt;=== 系统运行日志(可读日志，跟上面的logging无关)
+  +--- posix_logger.h    &lt;=== 系统写日志的操作
 </code></pre>
 
 <p>我们还是先从简单的开始入手分析，大骨头留在后面啃。先看status，status类用于存放数据库操作返回状态，这个类的私有成员变量仅仅是一个<code>const char *_state;</code>，它存储的数据结构如下：</p>
@@ -183,7 +183,7 @@
 
 <p><strong>options.h/options.cc</strong>是用来存放数据库打开关闭读写的一些选项，其中各个具体的选项将在以后对数据库的分析中谈及，这里也就一笔带过。<strong>Histogram.h/Histogram.cc</strong>是用于统计的直方图，里面涉及了一些算标准差、斜率之类的简单数学，这个类是用于给一些benchmark提供一个统计工具，跟leveldb本身是无关的，所以这里也就不作分析了。</p>
 
-<p>本篇对util整体做了个大致的介绍，然后分析了其中的一些比较简单的类。接下来我们将讨论变长整数编码，布隆过滤器，leveldb的内置cache，抽象运行环境已经非常非常重要的用以保证数据不丢的日志。</p>
+<p>本篇对util整体做了个大致的介绍，然后分析了其中的一些比较简单的类。接下来我们将讨论变长整数编码，布隆过滤器，leveldb的内置cache，抽象运行环境以及日志(记录系统状态的日志)。</p>
 
 <p>亲爱的童鞋们，如果你们觉得这个系列写得还不错，一定要记住把本博客的<a href="http://brg-liuwei.github.io">地址</a>加入到你的浏览器收藏夹中，并到<a href="https://github.com/brg-liuwei/brg-liuwei.github.io">这里</a>来帮我加一颗小星星哦~</p>
 
