@@ -11,3 +11,9 @@ github_username:  brg-liuwei
 
 # Build settings
 markdown: kramdown
+
+# comments
+comments:
+    provider: duoshuo
+    duoshuo:
+        short_name: brgliuwei
