@@ -90,20 +90,20 @@
   |
   +--- bloom.cc          &lt;=== bloom filter (布隆过滤器)
   |
-  +--- arena.h           &lt;=== arena是一个用于内存分配的环形缓冲区
-  +--- arena.cc
+  +--- logging.h         &lt;=== 日志中的数据处理(用于commitlog)
+  +--- logging.cc
   |
-  +--- cache.cc          &lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
+  +--- posix_logger.h    &lt;=== 系统写日志的操作(可读日志)
   |
   +--- comparator.cc     &lt;=== 比较器(头文件: include/leveldb/comparator.h)
   |
   +--- env.cc            &lt;=== 抽象的系统运行环境(头文件: include/leveldb/env.h)
   +--- env_posix.cc      &lt;=== 基于posix实现的具体运行环境
   |
-  +--- logging.h         &lt;=== 日志中的数据处理
-  +--- logging.cc
+  +--- arena.h           &lt;=== arena是一个用于内存分配的环形缓冲区
+  +--- arena.cc
   |
-  +--- posix_logger.h    &lt;=== 系统写日志的操作
+  +--- cache.cc          &lt;=== LRUCache实现(头文件: include/leveldb/cache.h)
 </code></pre>
 
 <p>我们还是先从简单的开始入手分析，大骨头留在后面啃。先看status，status类用于存放数据库操作返回状态，这个类的私有成员变量仅仅是一个<code>const char *_state;</code>，它存储的数据结构如下：</p>

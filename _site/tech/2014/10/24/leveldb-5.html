@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>和我一起学习leveldb [5 util (续)]</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/24/leveldb-5.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [5 util (续)]</h1>
+    <p class="post-meta">Oct 24, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>这一节我们分析<strong>logging</strong>和<strong>comparator</strong>.</p>
+
+<p>util中的logging是用于为leveldb操作commitlog提供一些基础方法。commitlog是用于保证消息在刷盘前宕机的情形下，对未持久化的消息进行恢复的模块。而<strong>include/leveldb/env.h</strong>和<strong>util/posix_logger.h</strong>中定义和实现的<strong>Logger</strong>则是打印可读信息的日志类. <strong>util/logging.h</strong>中为logging声明了几种方法：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="cm">/* 在str后面添加数字 */</span>
+<span class="lineno"> 2</span> <span class="k">extern</span> <span class="kt">void</span> <span class="nf">AppendNumberTo</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">str</span><span class="p">,</span> <span class="kt">uint64_t</span> <span class="n">num</span><span class="p">);</span>
+<span class="lineno"> 3</span> <span class="cm">/* 在str后面添加可见字符串value */</span>
+<span class="lineno"> 4</span> <span class="k">extern</span> <span class="kt">void</span> <span class="nf">AppendEscapedStringTo</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">str</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">);</span>
+<span class="lineno"> 5</span> <span class="cm">/* 数字转字符串 */</span>
+<span class="lineno"> 6</span> <span class="k">extern</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">NumberToString</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">num</span><span class="p">);</span>
+<span class="lineno"> 7</span> <span class="cm">/* 清除value中的不可见字符 */</span>
+<span class="lineno"> 8</span> <span class="k">extern</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">EscapeString</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">);</span>
+<span class="lineno"> 9</span> <span class="cm">/* 如果in的第一个字符是第二个参数c，则in指针前进一步并返回true */</span>
+<span class="lineno">10</span> <span class="k">extern</span> <span class="kt">bool</span> <span class="nf">ConsumeChar</span><span class="p">(</span><span class="n">Slice</span><span class="o">*</span> <span class="n">in</span><span class="p">,</span> <span class="kt">char</span> <span class="n">c</span><span class="p">);</span>
+<span class="lineno">11</span> <span class="cm">/* 消费in的前缀数字 */</span>
+<span class="lineno">12</span> <span class="k">extern</span> <span class="kt">bool</span> <span class="nf">ConsumeDecimalNumber</span><span class="p">(</span><span class="n">Slice</span><span class="o">*</span> <span class="n">in</span><span class="p">,</span> <span class="kt">uint64_t</span><span class="o">*</span> <span class="n">val</span><span class="p">);</span></code></pre></div>
+
+<p>这几个函数的意思都比较直观，具体的实现在<strong>util/logger.cc</strong>中，这里贴一下AppendEscapedStringTo函数的实现，注意可见字符的范围是：<strong>‘ ’</strong> 到 <strong>‘~’</strong></p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">void</span> <span class="nf">AppendEscapedStringTo</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">str</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>   <span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>     <span class="kt">char</span> <span class="n">c</span> <span class="o">=</span> <span class="n">value</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="lineno"> 4</span>     <span class="k">if</span> <span class="p">(</span><span class="n">c</span> <span class="o">&gt;=</span> <span class="sc">&#39; &#39;</span> <span class="o">&amp;&amp;</span> <span class="n">c</span> <span class="o">&lt;=</span> <span class="sc">&#39;~&#39;</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 5</span>       <span class="n">str</span><span class="o">-&gt;</span><span class="n">push_back</span><span class="p">(</span><span class="n">c</span><span class="p">);</span>
+<span class="lineno"> 6</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno"> 7</span>       <span class="kt">char</span> <span class="n">buf</span><span class="p">[</span><span class="mi">10</span><span class="p">];</span>
+<span class="lineno"> 8</span>       <span class="n">snprintf</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">buf</span><span class="p">),</span> <span class="s">&quot;</span><span class="se">\\</span><span class="s">x%02x&quot;</span><span class="p">,</span>
+<span class="lineno"> 9</span>                <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">unsigned</span> <span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0xff</span><span class="p">);</span>
+<span class="lineno">10</span>       <span class="n">str</span><span class="o">-&gt;</span><span class="n">append</span><span class="p">(</span><span class="n">buf</span><span class="p">);</span>
+<span class="lineno">11</span>     <span class="p">}</span>
+<span class="lineno">12</span>   <span class="p">}</span>
+<span class="lineno">13</span> <span class="p">}</span></code></pre></div>
+
+<p>关于commitlog，会在后面分析db目录的篇幅中专门分析。接下来看<strong>util/posix_logger.c</strong>，可读日志Logger在<strong>include/leveldb/env.h</strong>中有定义：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// An interface for writing log messages.</span>
+<span class="lineno"> 2</span> <span class="k">class</span> <span class="nc">Logger</span> <span class="p">{</span>
+<span class="lineno"> 3</span>     <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 4</span>         <span class="n">Logger</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 5</span>         <span class="k">virtual</span> <span class="o">~</span><span class="n">Logger</span><span class="p">();</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>         <span class="c1">// Write an entry to the log file with the specified format.</span>
+<span class="lineno"> 8</span>         <span class="k">virtual</span> <span class="kt">void</span> <span class="n">Logv</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">format</span><span class="p">,</span> <span class="kt">va_list</span> <span class="n">ap</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="k">private</span><span class="o">:</span>
+<span class="lineno">11</span>         <span class="c1">// No copying allowed</span>
+<span class="lineno">12</span>         <span class="n">Logger</span><span class="p">(</span><span class="k">const</span> <span class="n">Logger</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">13</span>         <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Logger</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">14</span> <span class="p">};</span></code></pre></div>
+
+<p>这个Logger类提供了一个接口Logv供实现，我们来看看<strong>util/posix_logger.h</strong>中对该接口的实现：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">Logv</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">format</span><span class="p">,</span> <span class="kt">va_list</span> <span class="n">ap</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">const</span> <span class="kt">uint64_t</span> <span class="n">thread_id</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">gettid_</span><span class="p">)();</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span>     <span class="c1">// We try twice: the first time with a fixed-size stack allocated buffer,</span>
+<span class="lineno"> 5</span>     <span class="c1">// and the second time with a much larger dynamically allocated buffer.</span>
+<span class="lineno"> 6</span>     <span class="kt">char</span> <span class="n">buffer</span><span class="p">[</span><span class="mi">500</span><span class="p">];</span>
+<span class="lineno"> 7</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">iter</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">iter</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">;</span> <span class="n">iter</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 8</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">base</span><span class="p">;</span>
+<span class="lineno"> 9</span>         <span class="kt">int</span> <span class="n">bufsize</span><span class="p">;</span>
+<span class="lineno">10</span>         <span class="k">if</span> <span class="p">(</span><span class="n">iter</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">11</span>             <span class="n">bufsize</span> <span class="o">=</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">buffer</span><span class="p">);</span>
+<span class="lineno">12</span>             <span class="n">base</span> <span class="o">=</span> <span class="n">buffer</span><span class="p">;</span>
+<span class="lineno">13</span>         <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">14</span>             <span class="n">bufsize</span> <span class="o">=</span> <span class="mi">30000</span><span class="p">;</span>
+<span class="lineno">15</span>             <span class="n">base</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">bufsize</span><span class="p">];</span>
+<span class="lineno">16</span>         <span class="p">}</span>
+<span class="lineno">17</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">p</span> <span class="o">=</span> <span class="n">base</span><span class="p">;</span>
+<span class="lineno">18</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">limit</span> <span class="o">=</span> <span class="n">base</span> <span class="o">+</span> <span class="n">bufsize</span><span class="p">;</span>
+<span class="lineno">19</span> 
+<span class="lineno">20</span>         <span class="k">struct</span> <span class="n">timeval</span> <span class="n">now_tv</span><span class="p">;</span>
+<span class="lineno">21</span>         <span class="n">gettimeofday</span><span class="p">(</span><span class="o">&amp;</span><span class="n">now_tv</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">);</span>
+<span class="lineno">22</span>         <span class="k">const</span> <span class="kt">time_t</span> <span class="n">seconds</span> <span class="o">=</span> <span class="n">now_tv</span><span class="p">.</span><span class="n">tv_sec</span><span class="p">;</span>
+<span class="lineno">23</span>         <span class="k">struct</span> <span class="n">tm</span> <span class="n">t</span><span class="p">;</span>
+<span class="lineno">24</span>         <span class="n">localtime_r</span><span class="p">(</span><span class="o">&amp;</span><span class="n">seconds</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">t</span><span class="p">);</span>
+<span class="lineno">25</span>         <span class="n">p</span> <span class="o">+=</span> <span class="n">snprintf</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">limit</span> <span class="o">-</span> <span class="n">p</span><span class="p">,</span>
+<span class="lineno">26</span>                 <span class="s">&quot;%04d/%02d/%02d-%02d:%02d:%02d.%06d %llx &quot;</span><span class="p">,</span>
+<span class="lineno">27</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_year</span> <span class="o">+</span> <span class="mi">1900</span><span class="p">,</span>
+<span class="lineno">28</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_mon</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+<span class="lineno">29</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_mday</span><span class="p">,</span>
+<span class="lineno">30</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_hour</span><span class="p">,</span>
+<span class="lineno">31</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_min</span><span class="p">,</span>
+<span class="lineno">32</span>                 <span class="n">t</span><span class="p">.</span><span class="n">tm_sec</span><span class="p">,</span>
+<span class="lineno">33</span>                 <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">now_tv</span><span class="p">.</span><span class="n">tv_usec</span><span class="p">),</span>
+<span class="lineno">34</span>                 <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">long</span> <span class="kt">long</span> <span class="kt">unsigned</span> <span class="kt">int</span><span class="o">&gt;</span><span class="p">(</span><span class="n">thread_id</span><span class="p">));</span>
+<span class="lineno">35</span> 
+<span class="lineno">36</span>         <span class="c1">// Print the message</span>
+<span class="lineno">37</span>         <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">&lt;</span> <span class="n">limit</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">38</span>             <span class="kt">va_list</span> <span class="n">backup_ap</span><span class="p">;</span>
+<span class="lineno">39</span>             <span class="n">va_copy</span><span class="p">(</span><span class="n">backup_ap</span><span class="p">,</span> <span class="n">ap</span><span class="p">);</span>
+<span class="lineno">40</span>             <span class="n">p</span> <span class="o">+=</span> <span class="n">vsnprintf</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">limit</span> <span class="o">-</span> <span class="n">p</span><span class="p">,</span> <span class="n">format</span><span class="p">,</span> <span class="n">backup_ap</span><span class="p">);</span>
+<span class="lineno">41</span>             <span class="n">va_end</span><span class="p">(</span><span class="n">backup_ap</span><span class="p">);</span>
+<span class="lineno">42</span>         <span class="p">}</span>
+<span class="lineno">43</span> 
+<span class="lineno">44</span>         <span class="c1">// Truncate to available space if necessary</span>
+<span class="lineno">45</span>         <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">&gt;=</span> <span class="n">limit</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">46</span>             <span class="k">if</span> <span class="p">(</span><span class="n">iter</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">47</span>                 <span class="k">continue</span><span class="p">;</span>       <span class="c1">// Try again with larger buffer</span>
+<span class="lineno">48</span>             <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">49</span>                 <span class="n">p</span> <span class="o">=</span> <span class="n">limit</span> <span class="o">-</span> <span class="mi">1</span><span class="p">;</span>
+<span class="lineno">50</span>             <span class="p">}</span>
+<span class="lineno">51</span>         <span class="p">}</span>
+<span class="lineno">52</span> 
+<span class="lineno">53</span>         <span class="c1">// Add newline if necessary</span>
+<span class="lineno">54</span>         <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">==</span> <span class="n">base</span> <span class="o">||</span> <span class="n">p</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="sc">&#39;\n&#39;</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">55</span>             <span class="o">*</span><span class="n">p</span><span class="o">++</span> <span class="o">=</span> <span class="sc">&#39;\n&#39;</span><span class="p">;</span>
+<span class="lineno">56</span>         <span class="p">}</span>
+<span class="lineno">57</span> 
+<span class="lineno">58</span>         <span class="n">assert</span><span class="p">(</span><span class="n">p</span> <span class="o">&lt;=</span> <span class="n">limit</span><span class="p">);</span>
+<span class="lineno">59</span>         <span class="n">fwrite</span><span class="p">(</span><span class="n">base</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">p</span> <span class="o">-</span> <span class="n">base</span><span class="p">,</span> <span class="n">file_</span><span class="p">);</span>
+<span class="lineno">60</span>         <span class="n">fflush</span><span class="p">(</span><span class="n">file_</span><span class="p">);</span>
+<span class="lineno">61</span>         <span class="k">if</span> <span class="p">(</span><span class="n">base</span> <span class="o">!=</span> <span class="n">buffer</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">62</span>             <span class="k">delete</span><span class="p">[]</span> <span class="n">base</span><span class="p">;</span>
+<span class="lineno">63</span>         <span class="p">}</span>
+<span class="lineno">64</span>         <span class="k">break</span><span class="p">;</span>
+<span class="lineno">65</span>     <span class="p">}</span>
+<span class="lineno">66</span> <span class="p">}</span></code></pre></div>
+
+<p>个人觉得这段代码非常值得学习。首先是考虑了内存分配的情况。通常看到的日志实现中，要么是在栈中设定一个定长缓冲区，然后设定一个日志最大长度，以此来避免内存分配；要么是直接分配一大块内存来放日志字符串。这里作者使用了两级“内存分配”，首先在栈中分配500个byte的缓冲区，这样长度小于500字节的日志就可以避免掉new的开销。如果发现放不下，再去new一个大块内存。当然如果单行日志太大，超过了30000字节，那么就直接做截断了。另外请注意这里对snprintf函数的使用，作者使用了一个哨兵，来避免越界(关于snprintf，请参考我的博客<a href="http://brg-liuwei.github.io/tech/2014/09/29/snprintf.html">误用snprintf导致的bug</a>).</p>
+
+<p>接下来我们来讨论<strong>Comparator</strong>，相关代码在include/leveldb/comparator.h和util/comparator.cc:</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">namespace</span> <span class="n">leveldb</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">class</span> <span class="nc">Slice</span><span class="p">;</span>
+<span class="lineno"> 3</span>     <span class="k">class</span> <span class="nc">Comparator</span> <span class="p">{</span>
+<span class="lineno"> 4</span>         <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 5</span>             <span class="k">virtual</span> <span class="o">~</span><span class="n">Comparator</span><span class="p">();</span>
+<span class="lineno"> 6</span>             <span class="k">virtual</span> <span class="kt">int</span> <span class="n">Compare</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">a</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 7</span>             <span class="k">virtual</span> <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Name</span><span class="p">()</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 8</span>             <span class="k">virtual</span> <span class="kt">void</span> <span class="n">FindShortestSeparator</span><span class="p">(</span>
+<span class="lineno"> 9</span>                     <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">start</span><span class="p">,</span>
+<span class="lineno">10</span>                     <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">limit</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">11</span>             <span class="k">virtual</span> <span class="kt">void</span> <span class="n">FindShortSuccessor</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">key</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">12</span>     <span class="p">};</span>
+<span class="lineno">13</span>     <span class="k">extern</span> <span class="k">const</span> <span class="n">Comparator</span><span class="o">*</span> <span class="nf">BytewiseComparator</span><span class="p">();</span>
+<span class="lineno">14</span> <span class="p">}</span></code></pre></div>
+
+<p><strong>Comparator</strong>当然要有<strong>Compare</strong>接口啦，leveldb的comparator另外还有两个比较奇怪的接口: <strong>FindShortestSeparator</strong>和<strong>FindShortSuccessor</strong>.这两个是高级函数，用于节省空间。其中<code>FindShortestSeparator(std::string *start, const Slice&amp; limit)</code>的作用是，如果<em>start &lt; limit,就把</em>start修改为*start和limit的共同前缀后面多一个字符加1。这句话不容易说清楚，我举个例子：</p>
+
+<pre><code> *start:    helloWorld
+ limit:     helloZookeeper
+ 由于 *start &lt; limit, 所以调用 FindShortSuccessor(start, limit)之后，start变成：
+ helloX (保留前缀，第一个不相同的字符+1)
+</code></pre>
+
+<p>而<code>FindShortSuccessor(std::string *key)</code>，则是把<em>key修改成一个比</em>key大一点短字符串。在BytewiseComparator中的实现非常简单，就是顺着key的第一个字符找，直到找到一个不是0xFF的字符，然后把该字符加1，并截断。从这两个函数我们可以看出，leveldb在存储中，对前缀相同的字符串做了一些工作，这样就可以存储多个串的公共前缀，节省存储空间。接下来把Comparator的一个具体实现：<code>BytewiseComparator</code>中的这两个高级函数的代码贴出来作为本篇的完结。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">virtual</span> <span class="kt">void</span> <span class="nf">FindShortestSeparator</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">start</span><span class="p">,</span> <span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">limit</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="c1">// Find length of common prefix</span>
+<span class="lineno"> 3</span>     <span class="kt">size_t</span> <span class="n">min_length</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">min</span><span class="p">(</span><span class="n">start</span><span class="o">-&gt;</span><span class="n">size</span><span class="p">(),</span> <span class="n">limit</span><span class="p">.</span><span class="n">size</span><span class="p">());</span>
+<span class="lineno"> 4</span>     <span class="kt">size_t</span> <span class="n">diff_index</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 5</span>     <span class="k">while</span> <span class="p">((</span><span class="n">diff_index</span> <span class="o">&lt;</span> <span class="n">min_length</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+<span class="lineno"> 6</span>             <span class="p">((</span><span class="o">*</span><span class="n">start</span><span class="p">)[</span><span class="n">diff_index</span><span class="p">]</span> <span class="o">==</span> <span class="n">limit</span><span class="p">[</span><span class="n">diff_index</span><span class="p">]))</span> <span class="p">{</span>
+<span class="lineno"> 7</span>         <span class="n">diff_index</span><span class="o">++</span><span class="p">;</span>
+<span class="lineno"> 8</span>     <span class="p">}</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="k">if</span> <span class="p">(</span><span class="n">diff_index</span> <span class="o">&gt;=</span> <span class="n">min_length</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">11</span>         <span class="c1">// Do not shorten if one string is a prefix of the other</span>
+<span class="lineno">12</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">13</span>         <span class="kt">uint8_t</span> <span class="n">diff_byte</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">((</span><span class="o">*</span><span class="n">start</span><span class="p">)[</span><span class="n">diff_index</span><span class="p">]);</span>
+<span class="lineno">14</span>         <span class="k">if</span> <span class="p">(</span><span class="n">diff_byte</span> <span class="o">&lt;</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="mh">0xff</span><span class="p">)</span> <span class="o">&amp;&amp;</span>
+<span class="lineno">15</span>                 <span class="n">diff_byte</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">limit</span><span class="p">[</span><span class="n">diff_index</span><span class="p">]))</span> <span class="p">{</span>
+<span class="lineno">16</span>             <span class="p">(</span><span class="o">*</span><span class="n">start</span><span class="p">)[</span><span class="n">diff_index</span><span class="p">]</span><span class="o">++</span><span class="p">;</span>
+<span class="lineno">17</span>             <span class="n">start</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="n">diff_index</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+<span class="lineno">18</span>             <span class="n">assert</span><span class="p">(</span><span class="n">Compare</span><span class="p">(</span><span class="o">*</span><span class="n">start</span><span class="p">,</span> <span class="n">limit</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">19</span>         <span class="p">}</span>
+<span class="lineno">20</span>     <span class="p">}</span>
+<span class="lineno">21</span> <span class="p">}</span>
+<span class="lineno">22</span> 
+<span class="lineno">23</span> <span class="k">virtual</span> <span class="kt">void</span> <span class="n">FindShortSuccessor</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">key</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno">24</span>     <span class="c1">// Find first character that can be incremented</span>
+<span class="lineno">25</span>     <span class="kt">size_t</span> <span class="n">n</span> <span class="o">=</span> <span class="n">key</span><span class="o">-&gt;</span><span class="n">size</span><span class="p">();</span>
+<span class="lineno">26</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">27</span>         <span class="k">const</span> <span class="kt">uint8_t</span> <span class="n">byte</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">key</span><span class="p">)[</span><span class="n">i</span><span class="p">];</span>
+<span class="lineno">28</span>         <span class="k">if</span> <span class="p">(</span><span class="n">byte</span> <span class="o">!=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">uint8_t</span><span class="o">&gt;</span><span class="p">(</span><span class="mh">0xff</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">29</span>             <span class="p">(</span><span class="o">*</span><span class="n">key</span><span class="p">)[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">byte</span> <span class="o">+</span> <span class="mi">1</span><span class="p">;</span>
+<span class="lineno">30</span>             <span class="n">key</span><span class="o">-&gt;</span><span class="n">resize</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">);</span>
+<span class="lineno">31</span>             <span class="k">return</span><span class="p">;</span>
+<span class="lineno">32</span>         <span class="p">}</span>
+<span class="lineno">33</span>     <span class="p">}</span>
+<span class="lineno">34</span>     <span class="c1">// *key is a run of 0xffs.  Leave it alone.</span>
+<span class="lineno">35</span> <span class="p">}</span></code></pre></div>
+
+
+  </article>
+
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+    </script>
+<!-- 多说公共JS代码 end -->
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
