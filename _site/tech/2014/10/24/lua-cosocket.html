@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>[技术小贴士]: lua cosocket</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/10/24/lua-cosocket.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">[技术小贴士]: lua cosocket</h1>
+    <p class="post-meta">Oct 24, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>从毕业之后的第一份工作开始，就接触了<a href="http://nginx.com/">Nginx</a>，之后便开始了对nginx的漫漫学习之旅。在读nginx源码的过程，我学到了很多操作系统、数据结构、程序设计方面的知识。Nginx是我人生中第一次认真读懂的源代码（以前读研时看的hadoop，cassandra都只是看了点皮毛，有很多地方都没看懂），对我而言，Nginx不仅仅是一个web服务器，它更是我技术之路中的启蒙老师。来到上海开始新的工作之后，我在<a href="http://www.qingting.fm/">qingtingFM</a>接触到了<a href="http://openresty.org/">openresty</a>，这是<a href="http://blog.sina.com.cn/s/articlelist_1834459124_0_1.html">agentzh</a>大神对nginx打的一个包。openresty的一个非常显著的特性就是支持用<a href="http://www.lua.org/">lua</a>写nginx配置，通过lua模块，可以非常容易地在nginx上实现很多功能。最近在openresty邮件列表中看到一个使用lua cosocket同上游服务器进行tcp连接的实例，感觉比较有学习价值：</p>
+
+<div class="highlight"><pre><code class="language-lua" data-lang="lua"><span class="lineno"> 1</span> <span class="kd">local</span> <span class="n">sock</span> <span class="o">=</span> <span class="n">ngx</span><span class="p">.</span><span class="n">socket</span><span class="p">.</span><span class="n">tcp</span><span class="p">()</span>
+<span class="lineno"> 2</span> <span class="n">sock</span><span class="p">:</span><span class="n">settimeout</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span> <span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">sock</span><span class="p">:</span><span class="n">connect</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">127.0.0.1&quot;</span><span class="p">,</span> <span class="mi">13900</span><span class="p">)</span>
+<span class="lineno"> 5</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span> <span class="k">then</span>
+<span class="lineno"> 6</span>     <span class="n">ngx</span><span class="p">.</span><span class="n">say</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">failed to connect: &quot;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+<span class="lineno"> 7</span>     <span class="k">return</span>
+<span class="lineno"> 8</span> <span class="k">end</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span> <span class="kd">local</span> <span class="n">bytes</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">sock</span><span class="p">:</span><span class="n">send</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">I am nginx&quot;</span><span class="p">)</span>
+<span class="lineno">11</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">bytes</span> <span class="k">then</span>
+<span class="lineno">12</span>     <span class="n">ngx</span><span class="p">.</span><span class="n">say</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">failed to send query: &quot;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+<span class="lineno">13</span>     <span class="k">return</span>
+<span class="lineno">14</span> <span class="k">end</span>
+<span class="lineno">15</span>  
+<span class="lineno">16</span> <span class="kd">local</span> <span class="n">chunk</span><span class="p">,</span><span class="n">err</span> <span class="o">=</span> <span class="n">sock</span><span class="p">:</span><span class="n">receive</span><span class="p">()</span>
+<span class="lineno">17</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span> <span class="k">then</span>
+<span class="lineno">18</span>     <span class="n">ngx</span><span class="p">.</span><span class="n">say</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">failed to receive a chunk: &quot;</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+<span class="lineno">19</span>     <span class="k">return</span>
+<span class="lineno">20</span> <span class="k">end</span>
+<span class="lineno">21</span>  
+<span class="lineno">22</span> <span class="n">ngx</span><span class="p">.</span><span class="n">log</span><span class="p">(</span><span class="n">ngx</span><span class="p">.</span><span class="n">DEBUG</span><span class="p">,</span><span class="s2">&quot;</span><span class="s">result: &quot;</span><span class="p">,</span> <span class="n">chunk</span><span class="p">)</span>
+<span class="lineno">23</span> 
+<span class="lineno">24</span> <span class="kd">local</span> <span class="n">ok</span><span class="p">,</span> <span class="n">err</span> <span class="o">=</span> <span class="n">sock</span><span class="p">:</span><span class="n">setkeepalive</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="lineno">25</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">ok</span> <span class="k">then</span>
+<span class="lineno">26</span>     <span class="n">ngx</span><span class="p">.</span><span class="n">say</span><span class="p">(</span><span class="s2">&quot;</span><span class="s">failed to put the connection into pool &quot;</span>
+<span class="lineno">27</span>         <span class="o">..</span> <span class="s2">&quot;</span><span class="s">with pool capacity 500 &quot;</span>
+<span class="lineno">28</span>         <span class="o">..</span> <span class="s2">&quot;</span><span class="s">and maximal idle time 60 sec&quot;</span><span class="p">)</span>
+<span class="lineno">29</span>     <span class="k">return</span>
+<span class="lineno">30</span> <span class="k">end</span></code></pre></div>
+
+<p>这段代码的目的是在nginx上建立一个向上游的tcp长连接（sock:setkeepalive函数将当期套接字放入lua的内建连接池中）。作者在邮件列表中说，连接到后端tcp服务器，过一会儿就断了，无法保持住这个长连接，不知道为什么。这段代码看起来没问题，于是我写了一个tcp服务器来验证：</p>
+
+<div class="highlight"><pre><code class="language-go" data-lang="go"><span class="lineno"> 1</span> <span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno"> 2</span> 	<span class="nx">service</span> <span class="o">:=</span> <span class="s">&quot;0.0.0.0:13900&quot;</span>
+<span class="lineno"> 3</span> 	<span class="nx">tcpAddr</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ResolveTCPAddr</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">service</span><span class="p">)</span>
+<span class="lineno"> 4</span> 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno"> 5</span> 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+<span class="lineno"> 6</span> 	<span class="p">}</span>
+<span class="lineno"> 7</span> 
+<span class="lineno"> 8</span> 	<span class="nx">listener</span><span class="p">,</span> <span class="nx">err2</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ListenTCP</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">tcpAddr</span><span class="p">)</span>
+<span class="lineno"> 9</span> 	<span class="k">if</span> <span class="nx">err2</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">10</span> 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err2</span><span class="p">)</span>
+<span class="lineno">11</span> 	<span class="p">}</span>
+<span class="lineno">12</span> 
+<span class="lineno">13</span> 	<span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+<span class="lineno">14</span> 	<span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span>
+<span class="lineno">15</span> 
+<span class="lineno">16</span> 	<span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">ch</span> <span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">17</span> 		<span class="nx">wg</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="lineno">18</span> 		<span class="k">for</span> <span class="p">{</span>
+<span class="lineno">19</span> 			<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">Accept</span><span class="p">()</span>
+<span class="lineno">20</span> 			<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">21</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept error: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+<span class="lineno">22</span> 			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">23</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept conn&quot;</span><span class="p">)</span>
+<span class="lineno">24</span> 				<span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">conn</span>
+<span class="lineno">25</span> 			<span class="p">}</span>
+<span class="lineno">26</span> 		<span class="p">}</span>
+<span class="lineno">27</span> 		<span class="nx">wg</span><span class="p">.</span><span class="nx">Done</span><span class="p">()</span>
+<span class="lineno">28</span> 	<span class="p">}(</span><span class="nx">ch</span><span class="p">)</span>
+<span class="lineno">29</span> 
+<span class="lineno">30</span> 	<span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span>
+<span class="lineno">31</span> 	<span class="k">for</span> <span class="p">{</span>
+<span class="lineno">32</span> 		<span class="nx">i</span><span class="o">++</span>
+<span class="lineno">33</span> 		<span class="nx">conn</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
+<span class="lineno">34</span> 		<span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">c</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">35</span> 			<span class="kd">var</span> <span class="nx">buf</span> <span class="p">[</span><span class="mi">512</span><span class="p">]</span><span class="kt">byte</span>
+<span class="lineno">36</span> 			<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">()</span>
+<span class="lineno">37</span> 			<span class="k">for</span> <span class="p">{</span>
+<span class="lineno">38</span> 				<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Read</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:])</span>
+<span class="lineno">39</span> 				<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">40</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;err: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+<span class="lineno">41</span> 					<span class="k">return</span>
+<span class="lineno">42</span> 				<span class="p">}</span>
+<span class="lineno">43</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;receive msg:&quot;</span><span class="p">,</span> <span class="nb">string</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:]))</span>
+<span class="lineno">44</span> 
+<span class="lineno">45</span> 				<span class="c1">// 注意这一行</span>
+<span class="lineno">46</span> 				<span class="nx">n</span><span class="p">,</span> <span class="nx">err2</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Write</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">&quot;consumer: &quot;</span> <span class="o">+</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">Itoa</span><span class="p">(</span><span class="nx">id</span><span class="p">)))</span>
+<span class="lineno">47</span> 				<span class="k">if</span> <span class="nx">err2</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">48</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">i</span><span class="p">,</span> <span class="s">&quot;write error: &quot;</span><span class="p">,</span> <span class="nx">err2</span><span class="p">)</span>
+<span class="lineno">49</span> 				<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">50</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;write bytes: &quot;</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span>
+<span class="lineno">51</span> 				<span class="p">}</span>
+<span class="lineno">52</span> 			<span class="p">}</span>
+<span class="lineno">53</span> 		<span class="p">}(</span><span class="nx">conn</span><span class="p">,</span> <span class="nx">i</span><span class="p">)</span>
+<span class="lineno">54</span> 	<span class="p">}</span>
+<span class="lineno">55</span> 	<span class="nx">wg</span><span class="p">.</span><span class="nx">Wait</span><span class="p">()</span>
+<span class="lineno">56</span> <span class="p">}</span></code></pre></div>
+
+<p>使用这个go服务器，确实会发现nginx无法keep住这个长连接，而且发现返回的数据nginx也不能及时收到，总是timeout。
+最后发现，其实问题是出在lua的sock:receive这个函数上。原来，这里的lua cosocket的receive语义是收到一个’\n’或者直到缓冲区满才返回（行缓冲），而我后端的服务器发送的数据没有以’\n’结尾，所以这里receive不返回，继续等待接收数据（注意，ngx的lua模块全部是使用cosocket，因此receive不返回并不会把整个ngx阻塞住）。如果要接收二进制数据，则需要指定receive的数据大小，例如：sock:receive(10)。因此如果是接收二进制数据，通常是先接收固定长度的头部，然后解析出body的长度，再去接收body。后来我又去拜读了agentzh大神的lua-resty-[mysql|redis|memcache]-module，证实了自己的猜想。</p>
+
+<p>这里有一个pull request是lua cosocket支持BSD语义的recv： <a href="https://github.com/openresty/lua-nginx-module/pull/290">https://github.com/openresty/lua-nginx-module/pull/290</a>
+另外这里有一个现成的lua http库: <a href="https://github.com/bakins/lua-resty-http-simple">lua-resty-http-simple</a></p>
+
+
+  </article>
+
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+    </script>
+<!-- 多说公共JS代码 end -->
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
