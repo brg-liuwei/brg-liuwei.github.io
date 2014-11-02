@@ -62,7 +62,9 @@
   </header>
 
   <article class="post-content">
-    <p>从毕业之后的第一份工作开始，就接触了<a href="http://nginx.com/">Nginx</a>，之后便开始了对nginx的漫漫学习之旅。在读nginx源码的过程，我学到了很多操作系统、数据结构、程序设计方面的知识。Nginx是我人生中第一次认真读懂的源代码（以前读研时看的hadoop，cassandra都只是看了点皮毛，有很多地方都没看懂），对我而言，Nginx不仅仅是一个web服务器，它更是我技术之路中的启蒙老师。来到上海开始新的工作之后，我在<a href="http://www.qingting.fm/">qingtingFM</a>接触到了<a href="http://openresty.org/">openresty</a>，这是<a href="http://blog.sina.com.cn/s/articlelist_1834459124_0_1.html">agentzh</a>大神对nginx打的一个包。openresty的一个非常显著的特性就是支持用<a href="http://www.lua.org/">lua</a>写nginx配置，通过lua模块，可以非常容易地在nginx上实现很多功能。最近在openresty邮件列表中看到一个使用lua cosocket同上游服务器进行tcp连接的实例，感觉比较有学习价值：</p>
+    <p>从毕业之后的第一份工作开始，就接触了<a href="http://nginx.com/">Nginx</a>，之后便开始了对nginx的漫漫学习之旅。在读nginx源码的过程，我学到了很多操作系统、数据结构、程序设计方面的知识。Nginx是我人生中第一次认真读懂的源代码（以前读研时看的hadoop，cassandra都只是看了点皮毛，有很多地方都没看懂），对我而言，Nginx不仅仅是一个web服务器，它更是我技术之路中的启蒙老师。</p>
+
+<p>来到上海开始新的工作之后，我在<a href="http://www.qingting.fm/">qingtingFM</a>接触到了<a href="http://openresty.org/">openresty</a>，这是<a href="http://blog.sina.com.cn/s/articlelist_1834459124_0_1.html">agentzh</a>大神对nginx打的一个包。openresty的一个非常显著的特性就是支持用<a href="http://www.lua.org/">lua</a>写nginx配置，通过lua模块，可以非常容易地在nginx上实现很多功能。最近在openresty邮件列表中看到一个使用lua cosocket同上游服务器进行tcp连接的实例，感觉比较有学习价值：</p>
 
 <div class="highlight"><pre><code class="language-lua" data-lang="lua"><span class="lineno"> 1</span> <span class="kd">local</span> <span class="n">sock</span> <span class="o">=</span> <span class="n">ngx</span><span class="p">.</span><span class="n">socket</span><span class="p">.</span><span class="n">tcp</span><span class="p">()</span>
 <span class="lineno"> 2</span> <span class="n">sock</span><span class="p">:</span><span class="n">settimeout</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
@@ -95,70 +97,67 @@
 <span class="lineno">29</span>     <span class="k">return</span>
 <span class="lineno">30</span> <span class="k">end</span></code></pre></div>
 
-<p>这段代码的目的是在nginx上建立一个向上游的tcp长连接（sock:setkeepalive函数将当期套接字放入lua的内建连接池中）。作者在邮件列表中说，连接到后端tcp服务器，过一会儿就断了，无法保持住这个长连接，不知道为什么。这段代码看起来没问题，于是我写了一个tcp服务器来验证：</p>
+<p>这段代码的目的是在nginx上建立一个向上游的tcp长连接（sock:setkeepalive函数将当前套接字放入lua的内建连接池中）。作者在邮件列表中说，连接到后端tcp服务器，过一会儿就断了，无法保持住这个长连接，不知道为什么。这段代码看起来没问题，于是我写了一个tcp服务器来验证：</p>
 
 <div class="highlight"><pre><code class="language-go" data-lang="go"><span class="lineno"> 1</span> <span class="kd">func</span> <span class="nx">main</span><span class="p">()</span> <span class="p">{</span>
-<span class="lineno"> 2</span> 	<span class="nx">service</span> <span class="o">:=</span> <span class="s">&quot;0.0.0.0:13900&quot;</span>
-<span class="lineno"> 3</span> 	<span class="nx">tcpAddr</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ResolveTCPAddr</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">service</span><span class="p">)</span>
-<span class="lineno"> 4</span> 	<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-<span class="lineno"> 5</span> 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
-<span class="lineno"> 6</span> 	<span class="p">}</span>
+<span class="lineno"> 2</span>     <span class="nx">service</span> <span class="o">:=</span> <span class="s">&quot;0.0.0.0:13900&quot;</span>
+<span class="lineno"> 3</span>     <span class="nx">tcpAddr</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ResolveTCPAddr</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">service</span><span class="p">)</span>
+<span class="lineno"> 4</span>     <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno"> 5</span>         <span class="nb">panic</span><span class="p">(</span><span class="nx">err</span><span class="p">)</span>
+<span class="lineno"> 6</span>     <span class="p">}</span>
 <span class="lineno"> 7</span> 
-<span class="lineno"> 8</span> 	<span class="nx">listener</span><span class="p">,</span> <span class="nx">err2</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ListenTCP</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">tcpAddr</span><span class="p">)</span>
-<span class="lineno"> 9</span> 	<span class="k">if</span> <span class="nx">err2</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-<span class="lineno">10</span> 		<span class="nb">panic</span><span class="p">(</span><span class="nx">err2</span><span class="p">)</span>
-<span class="lineno">11</span> 	<span class="p">}</span>
+<span class="lineno"> 8</span>     <span class="nx">listener</span><span class="p">,</span> <span class="nx">err2</span> <span class="o">:=</span> <span class="nx">net</span><span class="p">.</span><span class="nx">ListenTCP</span><span class="p">(</span><span class="s">&quot;tcp&quot;</span><span class="p">,</span> <span class="nx">tcpAddr</span><span class="p">)</span>
+<span class="lineno"> 9</span>     <span class="k">if</span> <span class="nx">err2</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">10</span>         <span class="nb">panic</span><span class="p">(</span><span class="nx">err2</span><span class="p">)</span>
+<span class="lineno">11</span>     <span class="p">}</span>
 <span class="lineno">12</span> 
-<span class="lineno">13</span> 	<span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
-<span class="lineno">14</span> 	<span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span>
+<span class="lineno">13</span>     <span class="kd">var</span> <span class="nx">wg</span> <span class="nx">sync</span><span class="p">.</span><span class="nx">WaitGroup</span>
+<span class="lineno">14</span>     <span class="nx">ch</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span>
 <span class="lineno">15</span> 
-<span class="lineno">16</span> 	<span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">ch</span> <span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
-<span class="lineno">17</span> 		<span class="nx">wg</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="lineno">18</span> 		<span class="k">for</span> <span class="p">{</span>
-<span class="lineno">19</span> 			<span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">Accept</span><span class="p">()</span>
-<span class="lineno">20</span> 			<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-<span class="lineno">21</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept error: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-<span class="lineno">22</span> 			<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-<span class="lineno">23</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept conn&quot;</span><span class="p">)</span>
-<span class="lineno">24</span> 				<span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">conn</span>
-<span class="lineno">25</span> 			<span class="p">}</span>
-<span class="lineno">26</span> 		<span class="p">}</span>
-<span class="lineno">27</span> 		<span class="nx">wg</span><span class="p">.</span><span class="nx">Done</span><span class="p">()</span>
-<span class="lineno">28</span> 	<span class="p">}(</span><span class="nx">ch</span><span class="p">)</span>
+<span class="lineno">16</span>     <span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">ch</span> <span class="kd">chan</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">17</span>         <span class="nx">wg</span><span class="p">.</span><span class="nx">Add</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="lineno">18</span>         <span class="k">for</span> <span class="p">{</span>
+<span class="lineno">19</span>             <span class="nx">conn</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">listener</span><span class="p">.</span><span class="nx">Accept</span><span class="p">()</span>
+<span class="lineno">20</span>             <span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">21</span>                 <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept error: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+<span class="lineno">22</span>             <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">23</span>                 <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;accept conn&quot;</span><span class="p">)</span>
+<span class="lineno">24</span>                 <span class="nx">ch</span> <span class="o">&lt;-</span> <span class="nx">conn</span>
+<span class="lineno">25</span>             <span class="p">}</span>
+<span class="lineno">26</span>         <span class="p">}</span>
+<span class="lineno">27</span>         <span class="nx">wg</span><span class="p">.</span><span class="nx">Done</span><span class="p">()</span>
+<span class="lineno">28</span>     <span class="p">}(</span><span class="nx">ch</span><span class="p">)</span>
 <span class="lineno">29</span> 
-<span class="lineno">30</span> 	<span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span>
-<span class="lineno">31</span> 	<span class="k">for</span> <span class="p">{</span>
-<span class="lineno">32</span> 		<span class="nx">i</span><span class="o">++</span>
-<span class="lineno">33</span> 		<span class="nx">conn</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
-<span class="lineno">34</span> 		<span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">c</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
-<span class="lineno">35</span> 			<span class="kd">var</span> <span class="nx">buf</span> <span class="p">[</span><span class="mi">512</span><span class="p">]</span><span class="kt">byte</span>
-<span class="lineno">36</span> 			<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">()</span>
-<span class="lineno">37</span> 			<span class="k">for</span> <span class="p">{</span>
-<span class="lineno">38</span> 				<span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Read</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:])</span>
-<span class="lineno">39</span> 				<span class="k">if</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-<span class="lineno">40</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;err: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
-<span class="lineno">41</span> 					<span class="k">return</span>
-<span class="lineno">42</span> 				<span class="p">}</span>
-<span class="lineno">43</span> 				<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;receive msg:&quot;</span><span class="p">,</span> <span class="nb">string</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:]))</span>
-<span class="lineno">44</span> 
-<span class="lineno">45</span> 				<span class="c1">// 注意这一行</span>
-<span class="lineno">46</span> 				<span class="nx">n</span><span class="p">,</span> <span class="nx">err2</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Write</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">&quot;consumer: &quot;</span> <span class="o">+</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">Itoa</span><span class="p">(</span><span class="nx">id</span><span class="p">)))</span>
-<span class="lineno">47</span> 				<span class="k">if</span> <span class="nx">err2</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
-<span class="lineno">48</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">i</span><span class="p">,</span> <span class="s">&quot;write error: &quot;</span><span class="p">,</span> <span class="nx">err2</span><span class="p">)</span>
-<span class="lineno">49</span> 				<span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-<span class="lineno">50</span> 					<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;write bytes: &quot;</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span>
-<span class="lineno">51</span> 				<span class="p">}</span>
-<span class="lineno">52</span> 			<span class="p">}</span>
-<span class="lineno">53</span> 		<span class="p">}(</span><span class="nx">conn</span><span class="p">,</span> <span class="nx">i</span><span class="p">)</span>
-<span class="lineno">54</span> 	<span class="p">}</span>
-<span class="lineno">55</span> 	<span class="nx">wg</span><span class="p">.</span><span class="nx">Wait</span><span class="p">()</span>
-<span class="lineno">56</span> <span class="p">}</span></code></pre></div>
+<span class="lineno">30</span>     <span class="nx">i</span> <span class="o">:=</span> <span class="mi">0</span>
+<span class="lineno">31</span>     <span class="k">for</span> <span class="p">{</span>
+<span class="lineno">32</span>         <span class="nx">i</span><span class="o">++</span>
+<span class="lineno">33</span>         <span class="nx">conn</span> <span class="o">:=</span> <span class="o">&lt;-</span><span class="nx">ch</span>
+<span class="lineno">34</span>         <span class="k">go</span> <span class="kd">func</span><span class="p">(</span><span class="nx">c</span> <span class="nx">net</span><span class="p">.</span><span class="nx">Conn</span><span class="p">,</span> <span class="nx">id</span> <span class="kt">int</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">35</span>             <span class="kd">var</span> <span class="nx">buf</span> <span class="p">[</span><span class="mi">512</span><span class="p">]</span><span class="kt">byte</span>
+<span class="lineno">36</span>             <span class="k">for</span> <span class="p">{</span>
+<span class="lineno">37</span>                 <span class="k">if</span> <span class="nx">_</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Read</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:]);</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">38</span>                     <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;err: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+<span class="lineno">39</span>                     <span class="k">return</span>
+<span class="lineno">40</span>                 <span class="p">}</span>
+<span class="lineno">41</span>                 <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">id</span><span class="p">,</span> <span class="s">&quot;receive msg:&quot;</span><span class="p">,</span> <span class="nb">string</span><span class="p">(</span><span class="nx">buf</span><span class="p">[:]))</span>
+<span class="lineno">42</span>                 <span class="cm">/* 注意这一行 */</span>
+<span class="lineno">43</span>                 <span class="k">if</span> <span class="nx">n</span><span class="p">,</span> <span class="nx">err</span> <span class="o">:=</span> <span class="nx">c</span><span class="p">.</span><span class="nx">Write</span><span class="p">([]</span><span class="nb">byte</span><span class="p">(</span><span class="s">&quot;consumer: &quot;</span> <span class="o">+</span> <span class="nx">strconv</span><span class="p">.</span><span class="nx">Itoa</span><span class="p">(</span><span class="nx">id</span><span class="p">)));</span> <span class="nx">err</span> <span class="o">!=</span> <span class="kc">nil</span> <span class="p">{</span>
+<span class="lineno">44</span>                     <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;consumer&quot;</span><span class="p">,</span> <span class="nx">i</span><span class="p">,</span> <span class="s">&quot;write error: &quot;</span><span class="p">,</span> <span class="nx">err</span><span class="p">)</span>
+<span class="lineno">45</span>                 <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">46</span>                     <span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="s">&quot;write bytes: &quot;</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span>
+<span class="lineno">47</span>                 <span class="p">}</span>
+<span class="lineno">48</span>             <span class="p">}</span>
+<span class="lineno">49</span>         <span class="p">}(</span><span class="nx">conn</span><span class="p">,</span> <span class="nx">i</span><span class="p">)</span>
+<span class="lineno">50</span>     <span class="p">}</span>
+<span class="lineno">51</span>     <span class="nx">wg</span><span class="p">.</span><span class="nx">Wait</span><span class="p">()</span>
+<span class="lineno">52</span> <span class="p">}</span></code></pre></div>
 
 <p>使用这个go服务器，确实会发现nginx无法keep住这个长连接，而且发现返回的数据nginx也不能及时收到，总是timeout。
 最后发现，其实问题是出在lua的sock:receive这个函数上。原来，这里的lua cosocket的receive语义是收到一个’\n’或者直到缓冲区满才返回（行缓冲），而我后端的服务器发送的数据没有以’\n’结尾，所以这里receive不返回，继续等待接收数据（注意，ngx的lua模块全部是使用cosocket，因此receive不返回并不会把整个ngx阻塞住）。如果要接收二进制数据，则需要指定receive的数据大小，例如：sock:receive(10)。因此如果是接收二进制数据，通常是先接收固定长度的头部，然后解析出body的长度，再去接收body。后来我又去拜读了agentzh大神的lua-resty-[mysql|redis|memcache]-module，证实了自己的猜想。</p>
 
-<p>这里有一个pull request是lua cosocket支持BSD语义的recv： <a href="https://github.com/openresty/lua-nginx-module/pull/290">https://github.com/openresty/lua-nginx-module/pull/290</a>
-另外这里有一个现成的lua http库: <a href="https://github.com/bakins/lua-resty-http-simple">lua-resty-http-simple</a></p>
+<p>这里有一个pull request是lua cosocket支持BSD语义的recv： <a href="https://github.com/openresty/lua-nginx-module/pull/290">https://github.com/openresty/lua-nginx-module/pull/290</a></p>
+
+<p>另外这里有一个现成的lua http库: <a href="https://github.com/bakins/lua-resty-http-simple">lua-resty-http-simple</a>可以用于解析http请求。</p>
 
 
   </article>
