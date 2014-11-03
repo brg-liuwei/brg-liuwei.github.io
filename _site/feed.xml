@@ -6,8 +6,8 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Mon, 03 Nov 2014 23:46:18 +0800</pubDate>
-    <lastBuildDate>Mon, 03 Nov 2014 23:46:18 +0800</lastBuildDate>
+    <pubDate>Mon, 03 Nov 2014 23:49:25 +0800</pubDate>
+    <lastBuildDate>Mon, 03 Nov 2014 23:49:25 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -309,9 +309,9 @@
 &lt;p&gt;另外这里有一个现成的lua http库: &lt;a href=&quot;https://github.com/bakins/lua-resty-http-simple&quot;&gt;lua-resty-http-simple&lt;/a&gt;可以用于解析http请求。&lt;/p&gt;
 
 </description>
-        <pubDate>Fri, 24 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/24/lua-cosocket.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/24/lua-cosocket.html</guid>
+        <pubDate>Sun, 02 Nov 2014 00:00:00 +0800</pubDate>
+        <link>http://someaddr.com/tech/2014/11/02/lua-cosocket.html</link>
+        <guid isPermaLink="true">http://someaddr.com/tech/2014/11/02/lua-cosocket.html</guid>
         
         
         <category>tech</category>
