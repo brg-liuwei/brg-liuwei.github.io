@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>[技术小贴士]: 用C/C++调用java</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/11/03/jni.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">[技术小贴士]: 用C/C++调用java</h1>
+    <p class="post-meta">Nov 3, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>以前在某娱乐公司工作的时候，做RTB(Real Time Bidding)广告用到了AES，当时是用C++实现的。后来部门作鸟兽散，孔雀东南飞，我当时的组长去了某DSP公司当CTO。有一天我的前组长突然叫我帮他把一个java的AES包转成C++。既然有现成的java实现，如果用C++去重新实现一次逻辑，显然是太麻烦啦。最简单的方案就是直接用C++去调用java代码。于是自己折腾了一番，终于悟出了一点道道。</p>
+
+<p>首先，C/C++程序需要包含头文件<strong>$JAVA_HOME/include/jni.h</strong>。在使用C/C++调用java的过程中，需要使用java虚拟机对象JavaVM和java环境对象JNIEnv。首先需要初始化java环境，创建java虚拟机，然后再去获取.class文件中的对象、方法，待使用完之后，最后再销毁java虚拟机，结束进程。</p>
+
+<p>我们可以把java虚拟机对象和java环境对象设定为全局对象，封装到一个初始化函数中：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="n">JavaVM</span> <span class="o">*</span><span class="n">jvm</span><span class="p">;</span>
+<span class="lineno"> 2</span> <span class="k">static</span> <span class="n">JNIEnv</span> <span class="o">*</span><span class="n">env</span><span class="p">;</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span> <span class="kt">void</span> <span class="nf">JVM_Init</span><span class="p">()</span>
+<span class="lineno"> 5</span> <span class="p">{</span>
+<span class="lineno"> 6</span>     <span class="n">JavaVMInitArgs</span> <span class="n">vm_args</span><span class="p">;</span>
+<span class="lineno"> 7</span>     <span class="n">JavaVMOption</span> <span class="n">options</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+<span class="lineno"> 8</span> 
+<span class="lineno"> 9</span>     <span class="n">vm_args</span><span class="p">.</span><span class="n">version</span> <span class="o">=</span> <span class="n">JNI_VERSION_1_2</span><span class="p">;</span>
+<span class="lineno">10</span>     <span class="n">vm_args</span><span class="p">.</span><span class="n">ignoreUnrecognized</span> <span class="o">=</span> <span class="n">JNI_TRUE</span><span class="p">;</span>
+<span class="lineno">11</span>     <span class="n">vm_args</span><span class="p">.</span><span class="n">nOptions</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">12</span> 
+<span class="lineno">13</span>     <span class="kt">char</span> <span class="n">classpath</span><span class="p">[</span><span class="mi">1024</span><span class="p">]</span> <span class="o">=</span> <span class="s">&quot;-Djava.class.path=&quot;</span><span class="p">;</span>
+<span class="lineno">14</span>     <span class="kt">char</span> <span class="o">*</span><span class="n">env_classpath</span> <span class="o">=</span> <span class="n">getenv</span><span class="p">(</span><span class="s">&quot;CLASSPATH&quot;</span><span class="p">);</span>
+<span class="lineno">15</span> 
+<span class="lineno">16</span>     <span class="k">if</span> <span class="p">(</span><span class="n">env_classpath</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">17</span>         <span class="n">options</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">optionString</span> <span class="o">=</span> <span class="n">strcat</span><span class="p">(</span><span class="n">classpath</span><span class="p">,</span> <span class="n">env_classpath</span><span class="p">);</span>
+<span class="lineno">18</span>         <span class="n">vm_args</span><span class="p">.</span><span class="n">nOptions</span><span class="o">++</span><span class="p">;</span>
+<span class="lineno">19</span>     <span class="p">}</span>
+<span class="lineno">20</span> 
+<span class="lineno">21</span>     <span class="k">if</span> <span class="p">(</span><span class="n">vm_args</span><span class="p">.</span><span class="n">nOptions</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">22</span>         <span class="n">vm_args</span><span class="p">.</span><span class="n">options</span> <span class="o">=</span> <span class="n">options</span><span class="p">;</span>
+<span class="lineno">23</span>     <span class="p">}</span>
+<span class="lineno">24</span> 
+<span class="lineno">25</span>     <span class="c1">// 创建java虚拟机</span>
+<span class="lineno">26</span>     <span class="n">jint</span> <span class="n">res</span> <span class="o">=</span> <span class="n">JNI_CreateJavaVM</span><span class="p">(</span><span class="o">&amp;</span><span class="n">jvm</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span> <span class="o">**</span><span class="p">)</span><span class="o">&amp;</span><span class="n">env</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">vm_args</span><span class="p">);</span>
+<span class="lineno">27</span>     <span class="k">if</span> <span class="p">(</span><span class="n">res</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">28</span>         <span class="n">printf</span><span class="p">(</span><span class="s">&quot;Create Java VM error, code = %d/n&quot;</span><span class="p">,</span> <span class="n">res</span><span class="p">);</span>
+<span class="lineno">29</span>         <span class="n">exit</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+<span class="lineno">30</span>     <span class="p">}</span>
+<span class="lineno">31</span> <span class="p">}</span>
+<span class="lineno">32</span> 
+<span class="lineno">33</span> <span class="kt">void</span> <span class="nf">JVM_Destroy</span><span class="p">()</span>
+<span class="lineno">34</span> <span class="p">{</span>
+<span class="lineno">35</span>     <span class="n">jvm</span><span class="o">-&gt;</span><span class="n">DestroyJavaVM</span><span class="p">();</span>
+<span class="lineno">36</span>     <span class="n">env</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">37</span>     <span class="n">jvm</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">38</span> <span class="p">}</span></code></pre></div>
+
+<p>初始化之后，获取了jvm和env句柄，就可以去获取java对象了：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// 获取java对象（对应磁盘上的SomeObj.class）</span>
+<span class="lineno"> 2</span>     <span class="n">jclass</span> <span class="n">cls</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">FindClass</span><span class="p">(</span><span class="s">&quot;SomeObj&quot;</span><span class="p">);</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span>     <span class="c1">// 获取静态方法，其中第三个参数，方法签名，可以用javap -s &lt;className&gt; 命令获取</span>
+<span class="lineno"> 5</span>     <span class="n">jmethodID</span> <span class="n">mid</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetStaticMethodID</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&quot;MethodName&quot;</span><span class="p">,</span> <span class="s">&quot;MethodSig&quot;</span><span class="p">);</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>     <span class="c1">// 获取方法</span>
+<span class="lineno"> 8</span>     <span class="n">jmethodID</span> <span class="n">mid</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetMethodID</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&quot;MethodName&quot;</span><span class="p">,</span> <span class="s">&quot;MethodSig&quot;</span><span class="p">);</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="c1">// 获取成员变量，成员变量的签名同样可以通过javap -s 查看</span>
+<span class="lineno">11</span>     <span class="n">jfieldID</span> <span class="n">fid</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetFieldID</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="s">&quot;fieldName&quot;</span><span class="p">,</span> <span class="s">&quot;fieldSig&quot;</span><span class="p">);</span>
+<span class="lineno">12</span> 
+<span class="lineno">13</span>     <span class="c1">// 调用静态方法</span>
+<span class="lineno">14</span>     <span class="n">jobject</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">CallStaticObjectMethod</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="p">...);</span>
+<span class="lineno">15</span> 
+<span class="lineno">16</span>     <span class="c1">// 调用方法</span>
+<span class="lineno">17</span>     <span class="n">jobject</span> <span class="n">obj</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">CallObjectMethod</span><span class="p">(</span><span class="n">cls</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="p">...);</span></code></pre></div>
+
+<p>另外，由于java和C/C++字符串的内存布局不一致，java动态分配的内存由java虚拟机回收，而C/C++分配的内存由调用者手动回收，所以，在写jni程序的时候，需要处理java和C/C++字符串的转换工作：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="n">jstring</span> <span class="nf">ch2jstring</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">cstr</span><span class="p">)</span>
+<span class="lineno"> 2</span> <span class="p">{</span>
+<span class="lineno"> 3</span>     <span class="kt">size_t</span> <span class="n">len</span> <span class="o">=</span> <span class="n">strlen</span><span class="p">(</span><span class="n">str</span><span class="p">);</span>
+<span class="lineno"> 4</span>     <span class="n">jclass</span> <span class="n">strClass</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">FindClass</span><span class="p">(</span><span class="s">&quot;java/lang/String&quot;</span><span class="p">);</span>
+<span class="lineno"> 5</span>     <span class="n">jmethodID</span> <span class="n">ctorID</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetMethodID</span><span class="p">(</span><span class="n">strClass</span><span class="p">,</span> <span class="s">&quot;&lt;init&gt;&quot;</span><span class="p">,</span> <span class="s">&quot;([BLjava/lang/String;)V&quot;</span><span class="p">);</span>
+<span class="lineno"> 6</span>     <span class="n">jbyteArray</span> <span class="n">bytes</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">NewByteArray</span><span class="p">(</span><span class="n">len</span><span class="p">);</span>
+<span class="lineno"> 7</span>     <span class="n">env</span><span class="o">-&gt;</span><span class="n">SetByteArrayRegion</span><span class="p">(</span><span class="n">bytes</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">len</span><span class="p">,</span> <span class="p">(</span><span class="n">jbyte</span><span class="o">*</span><span class="p">)</span><span class="n">cstr</span><span class="p">);</span>
+<span class="lineno"> 8</span>     <span class="n">jstring</span> <span class="n">encoding</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">NewStringUTF</span><span class="p">(</span><span class="s">&quot;utf-8&quot;</span><span class="p">);</span>
+<span class="lineno"> 9</span>     <span class="k">return</span> <span class="p">(</span><span class="n">jstring</span><span class="p">)</span><span class="n">env</span><span class="o">-&gt;</span><span class="n">NewObject</span><span class="p">(</span><span class="n">strClass</span><span class="p">,</span> <span class="n">ctorID</span><span class="p">,</span> <span class="n">bytes</span><span class="p">,</span> <span class="n">encoding</span><span class="p">);</span>
+<span class="lineno">10</span> <span class="p">}</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span> <span class="cm">/* 注意，这里返回的字符串需要手动调用free回收 */</span>
+<span class="lineno">13</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="nf">jstring2ch</span><span class="p">(</span><span class="n">jstring</span> <span class="n">jstr</span><span class="p">)</span>
+<span class="lineno">14</span> <span class="p">{</span>
+<span class="lineno">15</span>     <span class="kt">char</span><span class="o">*</span> <span class="n">rtn</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">16</span>     <span class="n">jclass</span> <span class="n">clsString</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">FindClass</span><span class="p">(</span><span class="s">&quot;java/lang/String&quot;</span><span class="p">);</span>
+<span class="lineno">17</span>     <span class="n">jstring</span> <span class="n">strEncode</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">NewStringUTF</span><span class="p">(</span><span class="s">&quot;utf-8&quot;</span><span class="p">);</span>
+<span class="lineno">18</span>     <span class="n">jmethodID</span> <span class="n">mid</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetMethodID</span><span class="p">(</span><span class="n">clsString</span><span class="p">,</span> <span class="s">&quot;getBytes&quot;</span><span class="p">,</span> <span class="s">&quot;(Ljava/lang/String;)[B&quot;</span><span class="p">);</span>
+<span class="lineno">19</span>     <span class="n">jbyteArray</span> <span class="n">barr</span><span class="o">=</span> <span class="p">(</span><span class="n">jbyteArray</span><span class="p">)</span><span class="n">env</span><span class="o">-&gt;</span><span class="n">CallObjectMethod</span><span class="p">(</span><span class="n">jstr</span><span class="p">,</span> <span class="n">mid</span><span class="p">,</span> <span class="n">strEncode</span><span class="p">);</span>
+<span class="lineno">20</span>     <span class="n">jsize</span> <span class="n">alen</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetArrayLength</span><span class="p">(</span><span class="n">barr</span><span class="p">);</span>
+<span class="lineno">21</span>     <span class="n">jbyte</span><span class="o">*</span> <span class="n">ba</span> <span class="o">=</span> <span class="n">env</span><span class="o">-&gt;</span><span class="n">GetByteArrayElements</span><span class="p">(</span><span class="n">barr</span><span class="p">,</span> <span class="n">JNI_FALSE</span><span class="p">);</span>
+<span class="lineno">22</span>     <span class="k">if</span> <span class="p">(</span><span class="n">alen</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">23</span>     	<span class="n">rtn</span> <span class="o">=</span> <span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">)</span><span class="n">malloc</span><span class="p">(</span><span class="n">alen</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+<span class="lineno">24</span>     	<span class="n">memcpy</span><span class="p">(</span><span class="n">rtn</span><span class="p">,</span> <span class="n">ba</span><span class="p">,</span> <span class="n">alen</span><span class="p">);</span>
+<span class="lineno">25</span>     	<span class="n">rtn</span><span class="p">[</span><span class="n">alen</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">26</span>     <span class="p">}</span>
+<span class="lineno">27</span>     <span class="n">env</span><span class="o">-&gt;</span><span class="n">ReleaseByteArrayElements</span><span class="p">(</span><span class="n">barr</span><span class="p">,</span> <span class="n">ba</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">28</span>     <span class="k">return</span> <span class="n">rtn</span><span class="p">;</span>
+<span class="lineno">29</span> <span class="p">}</span></code></pre></div>
+
+<p>如果您是一位C++工程师，那么，到这里就可以结束了。然后如果你是一位C工程师，那么这里仅仅只是开始而已。我一直觉得使用纯C的人才是真正的神。当然啦，不是说用C++的工程师都很逊，而是写C++的真正牛人，在C++工程师中所占的比例是极小的。而绝大多数C++工程师，他们夜以继日所干的事情，无非就是不断地在他们的代码中埋下更多的隐形炸弹和性能炸弹，例如默认拷贝函数、大对象的值传递等等等等。用纯粹的C写代码是有好处的，一个最最直观的优势，就是你能很方便地使用python,go,lua等语言直接调用你的C代码，而如果你想要调用的语言是C++，那你可得折腾一番啦。</p>
+
+<p>闲侃时间结束，我们来深入到<strong>jni.h</strong>中看看C和C++调用java的区别：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="cm">/*</span>
+<span class="lineno"> 2</span> <span class="cm"> * JNI Invocation Interface.</span>
+<span class="lineno"> 3</span> <span class="cm"> */</span>
+<span class="lineno"> 4</span> 
+<span class="lineno"> 5</span> <span class="k">struct</span> <span class="n">JNIInvokeInterface_</span><span class="p">;</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span> <span class="k">struct</span> <span class="n">JavaVM_</span><span class="p">;</span>
+<span class="lineno"> 8</span> 
+<span class="lineno"> 9</span> <span class="cp">#ifdef __cplusplus</span>
+<span class="lineno">10</span> <span class="k">typedef</span> <span class="n">JavaVM_</span> <span class="n">JavaVM</span><span class="p">;</span>
+<span class="lineno">11</span> <span class="cp">#else</span>
+<span class="lineno">12</span> <span class="k">typedef</span> <span class="k">const</span> <span class="k">struct</span> <span class="n">JNIInvokeInterface_</span> <span class="o">*</span><span class="n">JavaVM</span><span class="p">;</span>
+<span class="lineno">13</span> <span class="cp">#endif</span></code></pre></div>
+
+<p>我们看到，在jni.h中，如果是用C++编译器，那么JavaVM其实是JavaVM<em>，而如果是C编译器，则是JNIInvokeInterface</em> *，先来看看JavaVM_，由于是C++编译环境，所以有一个this指针，那么在这里只需要向C函数传入this指针就可以了，所以才有了<code>functions-&gt;DestroyJavaVM(this)</code>这样的代码。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">struct</span> <span class="n">JavaVM_</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">const</span> <span class="k">struct</span> <span class="n">JNIInvokeInterface_</span> <span class="o">*</span><span class="n">functions</span><span class="p">;</span>
+<span class="lineno"> 3</span> <span class="cp">#ifdef __cplusplus</span>
+<span class="lineno"> 4</span> 
+<span class="lineno"> 5</span>     <span class="n">jint</span> <span class="nf">DestroyJavaVM</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno"> 6</span>         <span class="k">return</span> <span class="n">functions</span><span class="o">-&gt;</span><span class="n">DestroyJavaVM</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+<span class="lineno"> 7</span>     <span class="p">}</span>
+<span class="lineno"> 8</span>     <span class="n">jint</span> <span class="nf">AttachCurrentThread</span><span class="p">(</span><span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 9</span>         <span class="k">return</span> <span class="n">functions</span><span class="o">-&gt;</span><span class="n">AttachCurrentThread</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">penv</span><span class="p">,</span> <span class="n">args</span><span class="p">);</span>
+<span class="lineno">10</span>     <span class="p">}</span>
+<span class="lineno">11</span>     <span class="n">jint</span> <span class="nf">DetachCurrentThread</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">12</span>         <span class="k">return</span> <span class="n">functions</span><span class="o">-&gt;</span><span class="n">DetachCurrentThread</span><span class="p">(</span><span class="k">this</span><span class="p">);</span>
+<span class="lineno">13</span>     <span class="p">}</span>
+<span class="lineno">14</span> 
+<span class="lineno">15</span>     <span class="n">jint</span> <span class="nf">GetEnv</span><span class="p">(</span><span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="n">jint</span> <span class="n">version</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">16</span>         <span class="k">return</span> <span class="n">functions</span><span class="o">-&gt;</span><span class="n">GetEnv</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">penv</span><span class="p">,</span> <span class="n">version</span><span class="p">);</span>
+<span class="lineno">17</span>     <span class="p">}</span>
+<span class="lineno">18</span>     <span class="n">jint</span> <span class="nf">AttachCurrentThreadAsDaemon</span><span class="p">(</span><span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">args</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">19</span>         <span class="k">return</span> <span class="n">functions</span><span class="o">-&gt;</span><span class="n">AttachCurrentThreadAsDaemon</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">penv</span><span class="p">,</span> <span class="n">args</span><span class="p">);</span>
+<span class="lineno">20</span>     <span class="p">}</span>
+<span class="lineno">21</span> <span class="cp">#endif</span>
+<span class="lineno">22</span> <span class="p">};</span></code></pre></div>
+
+<p>而如果是在C编译器环境中，由于没有this指针，我们只能够自己显式地手动传入”this”指针，就像用C来实现C++一样：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">struct</span> <span class="n">JNIInvokeInterface_</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="kt">void</span> <span class="o">*</span><span class="n">reserved0</span><span class="p">;</span>
+<span class="lineno"> 3</span>     <span class="kt">void</span> <span class="o">*</span><span class="n">reserved1</span><span class="p">;</span>
+<span class="lineno"> 4</span>     <span class="kt">void</span> <span class="o">*</span><span class="n">reserved2</span><span class="p">;</span>
+<span class="lineno"> 5</span> 
+<span class="lineno"> 6</span> <span class="cp">#if !TARGET_RT_MAC_CFM &amp;&amp; defined(__ppc__)</span>
+<span class="lineno"> 7</span>     <span class="kt">void</span><span class="o">*</span> <span class="n">cfm_vectors</span><span class="p">[</span><span class="mi">4</span><span class="p">];</span>
+<span class="lineno"> 8</span> <span class="cp">#endif </span><span class="cm">/* !TARGET_RT_MAC_CFM &amp;&amp; defined(__ppc__) */</span><span class="cp"></span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="n">jint</span> <span class="p">(</span><span class="n">JNICALL</span> <span class="o">*</span><span class="n">DestroyJavaVM</span><span class="p">)(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">);</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span>     <span class="n">jint</span> <span class="p">(</span><span class="n">JNICALL</span> <span class="o">*</span><span class="n">AttachCurrentThread</span><span class="p">)(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">,</span> <span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">args</span><span class="p">);</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>     <span class="n">jint</span> <span class="p">(</span><span class="n">JNICALL</span> <span class="o">*</span><span class="n">DetachCurrentThread</span><span class="p">)(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">);</span>
+<span class="lineno">15</span> 
+<span class="lineno">16</span>     <span class="n">jint</span> <span class="p">(</span><span class="n">JNICALL</span> <span class="o">*</span><span class="n">GetEnv</span><span class="p">)(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">,</span> <span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="n">jint</span> <span class="n">version</span><span class="p">);</span>
+<span class="lineno">17</span> 
+<span class="lineno">18</span>     <span class="n">jint</span> <span class="p">(</span><span class="n">JNICALL</span> <span class="o">*</span><span class="n">AttachCurrentThreadAsDaemon</span><span class="p">)(</span><span class="n">JavaVM</span> <span class="o">*</span><span class="n">vm</span><span class="p">,</span> <span class="kt">void</span> <span class="o">**</span><span class="n">penv</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">args</span><span class="p">);</span>
+<span class="lineno">19</span>     
+<span class="lineno">20</span> <span class="cp">#if TARGET_RT_MAC_CFM &amp;&amp; defined(__ppc__)</span>
+<span class="lineno">21</span>     <span class="kt">void</span><span class="o">*</span> <span class="n">real_functions</span><span class="p">[</span><span class="mi">5</span><span class="p">];</span>
+<span class="lineno">22</span> <span class="cp">#endif </span><span class="cm">/* TARGET_RT_MAC_CFM &amp;&amp; defined(__ppc__) */</span><span class="cp"></span>
+<span class="lineno">23</span> <span class="p">};</span></code></pre></div>
+
+<p>我们看到，这里面的所有函数，第一个参数都是<code>JavaVM *vm</code>，这就是”this”指针，因此，如果我们是在C中去调用java，需要自己传入jvm这个二级指针（** 注意，如果是C++中，jvm是一个一级指针，而在C中，jvm是一个二级指针，请注意前面对JavaVM类型的typedef **），因此，对应的代码应该是这样：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="n">JavaVM</span> <span class="o">*</span><span class="n">jvm</span><span class="p">;</span>
+<span class="lineno"> 2</span>     <span class="k">static</span> <span class="n">JNIEnv</span> <span class="o">*</span><span class="n">env</span><span class="p">;</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span>     <span class="c1">// 创建java虚拟机</span>
+<span class="lineno"> 5</span>     <span class="n">jint</span> <span class="n">res</span> <span class="o">=</span> <span class="n">JNI_CreateJavaVM</span><span class="p">(</span><span class="o">&amp;</span><span class="n">jvm</span><span class="p">,</span> <span class="p">(</span><span class="kt">void</span> <span class="o">**</span><span class="p">)</span><span class="o">&amp;</span><span class="n">env</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">vm_args</span><span class="p">);</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>     <span class="c1">// 获取class，注意要手动传入env（即C++中的this指针）</span>
+<span class="lineno"> 8</span>     <span class="n">jclass</span> <span class="n">clsString</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">env</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">FindClass</span><span class="p">(</span><span class="n">env</span><span class="p">,</span> <span class="s">&quot;java/lang/String&quot;</span><span class="p">);</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>     <span class="c1">// ...</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span>     <span class="cm">/* 销毁虚拟机（注意，JavaVM *jvm表面看上去是一级指针，</span>
+<span class="lineno">13</span> <span class="cm">       其实JavaVM在C环境下是JNIInvokeInterface_ *，</span>
+<span class="lineno">14</span> <span class="cm">       所以jvm实际是个二级指针，因此，(*jvm)后面应该跟-&gt;操作符，</span>
+<span class="lineno">15</span> <span class="cm">       而不是.操作符 ）</span>
+<span class="lineno">16</span> <span class="cm">    */</span>
+<span class="lineno">17</span>     <span class="p">(</span><span class="o">*</span><span class="n">jvm</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">DestroyJavaVM</span><span class="p">(</span><span class="n">jvm</span><span class="p">);</span></code></pre></div>
+
+<p>分析了这么多，你晕了吗？ :)</p>
+
+  </article>
+
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+    </script>
+<!-- 多说公共JS代码 end -->
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
