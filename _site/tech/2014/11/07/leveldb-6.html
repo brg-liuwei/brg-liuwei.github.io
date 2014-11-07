@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+    <title>和我一起学习leveldb [6 util (续)]</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/11/07/leveldb-6.html">
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [6 util (续)]</h1>
+    <p class="post-meta">Nov 7, 2014</p>
+  </header>
+
+  <article class="post-content">
+    <p>这一节我们来分析leveldb对运行时环境的封装：<strong>env</strong>.
+<strong>env</strong>的头文件是<strong>include/leveldb/env.h</strong>，<strong>util/env.cc</strong>是env中的一些平台无关的基本操作的实现，<strong>util/env_posix.cc</strong>则是遵循Posix接口的PosixEnv的实现。另外，在helpers/memenv目录中，还实现了一个在纯内存环境中使用的<strong>InMemoryEnv</strong>，我猜测这是用于调试或者跑benchmark的。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">class</span> <span class="nc">Env</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 3</span>         <span class="n">Env</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 4</span>         <span class="k">virtual</span> <span class="o">~</span><span class="n">Env</span><span class="p">();</span>
+<span class="lineno"> 5</span>         <span class="k">static</span> <span class="n">Env</span><span class="o">*</span> <span class="nf">Default</span><span class="p">();</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">NewSequentialFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span>
+<span class="lineno"> 8</span>                 <span class="n">SequentialFile</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 9</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">NewRandomAccessFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span>
+<span class="lineno">10</span>                 <span class="n">RandomAccessFile</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">11</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">NewWritableFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span>
+<span class="lineno">12</span>                 <span class="n">WritableFile</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>         <span class="k">virtual</span> <span class="kt">bool</span> <span class="n">FileExists</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">15</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">GetChildren</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dir</span><span class="p">,</span>    <span class="c1">// 获取目录dir的所有子节点</span>
+<span class="lineno">16</span>                 <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;*</span> <span class="n">result</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">17</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">DeleteFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">18</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">CreateDir</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dirname</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">19</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">DeleteDir</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">dirname</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">20</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">GetFileSize</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="kt">uint64_t</span><span class="o">*</span> <span class="n">file_size</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">21</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">RenameFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">src</span><span class="p">,</span>
+<span class="lineno">22</span>                 <span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">target</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">23</span> 
+<span class="lineno">24</span>         <span class="c1">// 这里的LockFile接口是try-lock</span>
+<span class="lineno">25</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">LockFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="n">FileLock</span><span class="o">**</span> <span class="n">lock</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">26</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">UnlockFile</span><span class="p">(</span><span class="n">FileLock</span><span class="o">*</span> <span class="n">lock</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">27</span> 
+<span class="lineno">28</span>         <span class="c1">// 向线程池中提交一个任务</span>
+<span class="lineno">29</span>         <span class="k">virtual</span> <span class="kt">void</span> <span class="n">Schedule</span><span class="p">(</span>
+<span class="lineno">30</span>                 <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">),</span>
+<span class="lineno">31</span>                 <span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">32</span>         <span class="k">virtual</span> <span class="kt">void</span> <span class="n">StartThread</span><span class="p">(</span><span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">),</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">33</span> 
+<span class="lineno">34</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">GetTestDirectory</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">*</span> <span class="n">path</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">35</span> 
+<span class="lineno">36</span>         <span class="k">virtual</span> <span class="n">Status</span> <span class="n">NewLogger</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="n">Logger</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">37</span> 
+<span class="lineno">38</span>         <span class="c1">// 获取当前毫秒数</span>
+<span class="lineno">39</span>         <span class="k">virtual</span> <span class="kt">uint64_t</span> <span class="n">NowMicros</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">40</span>         <span class="k">virtual</span> <span class="kt">void</span> <span class="n">SleepForMicroseconds</span><span class="p">(</span><span class="kt">int</span> <span class="n">micros</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">41</span> 
+<span class="lineno">42</span>     <span class="k">private</span><span class="o">:</span>
+<span class="lineno">43</span>         <span class="c1">// No copying allowed</span>
+<span class="lineno">44</span>         <span class="n">Env</span><span class="p">(</span><span class="k">const</span> <span class="n">Env</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">45</span>         <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Env</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">46</span> <span class="p">}</span></code></pre></div>
+
+<p><code>class Env</code>中的成员函数命名很清晰地描述了其对应的接口功能。其中，在Env中需要实现如下的几个类：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno">1</span> <span class="k">namespace</span> <span class="n">leveldb</span> <span class="p">{</span>
+<span class="lineno">2</span>     <span class="k">class</span> <span class="nc">FileLock</span><span class="p">;</span>
+<span class="lineno">3</span>     <span class="k">class</span> <span class="nc">Logger</span><span class="p">;</span>
+<span class="lineno">4</span>     <span class="k">class</span> <span class="nc">RandomAccessFile</span><span class="p">;</span>
+<span class="lineno">5</span>     <span class="k">class</span> <span class="nc">SequentialFile</span><span class="p">;</span>
+<span class="lineno">6</span>     <span class="k">class</span> <span class="nc">Slice</span><span class="p">;</span>
+<span class="lineno">7</span>     <span class="k">class</span> <span class="nc">WritableFile</span><span class="p">;</span>
+<span class="lineno">8</span> <span class="p">};</span></code></pre></div>
+
+<p>其中，<code>class FileLock</code>是用于对文件加锁的类，<code>class Logger</code>是用于写日志的类，需要实现<code>virtual void Logv(const char* format, va_list ap) = 0;</code>接口，<code>class RandomAccessFile</code>是对随机只读文件的封装，需要实现<code>Read</code>接口，<code>class SequentialFile</code>是对顺序读文件操作的封装，其中实现了接口<code>Read</code>和<code>Skip</code>。<code>WritableFile</code> 则是对可写文件的封装，需要实现的几个接口分别是：<code>Append</code>,<code>Close</code>,<code>Flush</code>,<code>Sync</code>。我们接下来看看这几个类的具体实现。</p>
+
+  </article>
+
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+    </script>
+<!-- 多说公共JS代码 end -->
+
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>
