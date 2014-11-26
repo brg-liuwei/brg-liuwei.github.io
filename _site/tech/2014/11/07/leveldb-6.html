@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>和我一起学习leveldb [6 util (续)]</title>
+    <title>和我一起学习leveldb [6 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
@@ -57,12 +57,14 @@
         <div class="post">
 
   <header class="post-header">
-    <h1 class="post-title">和我一起学习leveldb [6 util (续)]</h1>
+    <h1 class="post-title">和我一起学习leveldb [6 util(续)]</h1>
     <p class="post-meta">Nov 7, 2014</p>
   </header>
 
   <article class="post-content">
-    <p>这一节我们来分析leveldb对运行时环境的封装：<strong>env</strong>.
+    <h1 id="section">[运行时环境]</h1>
+
+<p>这一节我们来分析leveldb对运行时环境的封装：<strong>env</strong>.
 <strong>env</strong>的头文件是<strong>include/leveldb/env.h</strong>，<strong>util/env.cc</strong>是env中的一些平台无关的基本操作的实现，<strong>util/env_posix.cc</strong>则是遵循Posix接口的PosixEnv的实现。另外，在helpers/memenv目录中，还实现了一个在纯内存环境中使用的<strong>InMemoryEnv</strong>，我猜测这是用于调试或者跑benchmark的。</p>
 
 <div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">class</span> <span class="nc">Env</span> <span class="p">{</span>
@@ -123,7 +125,510 @@
 <span class="lineno">7</span>     <span class="k">class</span> <span class="nc">WritableFile</span><span class="p">;</span>
 <span class="lineno">8</span> <span class="p">};</span></code></pre></div>
 
-<p>其中，<code>class FileLock</code>是用于对文件加锁的类，<code>class Logger</code>是用于写日志的类，需要实现<code>virtual void Logv(const char* format, va_list ap) = 0;</code>接口，<code>class RandomAccessFile</code>是对随机只读文件的封装，需要实现<code>Read</code>接口，<code>class SequentialFile</code>是对顺序读文件操作的封装，其中实现了接口<code>Read</code>和<code>Skip</code>。<code>WritableFile</code> 则是对可写文件的封装，需要实现的几个接口分别是：<code>Append</code>,<code>Close</code>,<code>Flush</code>,<code>Sync</code>。我们接下来看看这几个类的具体实现。</p>
+<p>其中，<code>class FileLock</code>是用于对文件加锁的类，<code>class Logger</code>是用于写日志的类，需要实现<code>virtual void Logv(const char* format, va_list ap) = 0;</code>接口，leveldb实现了Posix环境下的日志工具<code>PosixLogger</code>，我们已经在leveldb[5]中对其进行了分析。<code>class RandomAccessFile</code>是对随机只读文件的封装，需要实现<code>Read</code>接口，<code>class SequentialFile</code>是对顺序读文件操作的封装，其中实现了接口<code>Read</code>和<code>Skip</code>。<code>WritableFile</code> 则是对可写文件的封装，需要实现的几个接口分别是：<code>Append</code>,<code>Close</code>,<code>Flush</code>,<code>Sync</code>。我们接下来看看这几个类的具体实现。</p>
+
+<p>先来看<code>class FileLock</code>，这个类的声明在<strong>include/leveldb/env.h</strong>中，在<strong>util/env_posix.cc</strong>中，有在posix环境下的具体实现<code>PosixFileLock</code>:</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// file: include/leveldb/env.h</span>
+<span class="lineno"> 2</span> <span class="k">class</span> <span class="nc">FileLock</span> <span class="p">{</span>
+<span class="lineno"> 3</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 4</span>   <span class="n">FileLock</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 5</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">FileLock</span><span class="p">();</span>
+<span class="lineno"> 6</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno"> 7</span>   <span class="c1">// No copying allowed</span>
+<span class="lineno"> 8</span>   <span class="n">FileLock</span><span class="p">(</span><span class="k">const</span> <span class="n">FileLock</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno"> 9</span>   <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">FileLock</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">10</span> <span class="p">};</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span> <span class="c1">// Posix环境下的FileLock</span>
+<span class="lineno">13</span> <span class="c1">// file: util/posix_env.cc</span>
+<span class="lineno">14</span> <span class="k">class</span> <span class="nc">PosixFileLock</span> <span class="o">:</span> <span class="k">public</span> <span class="n">FileLock</span> <span class="p">{</span>
+<span class="lineno">15</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno">16</span>   <span class="kt">int</span> <span class="n">fd_</span><span class="p">;</span>
+<span class="lineno">17</span> <span class="p">};</span>
+<span class="lineno">18</span> 
+<span class="lineno">19</span> <span class="c1">// class PosixEnv 成员方法</span>
+<span class="lineno">20</span> <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">LockFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="n">FileLock</span><span class="o">**</span> <span class="n">lock</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">21</span>   <span class="o">*</span><span class="n">lock</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">22</span>   <span class="n">Status</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">23</span>   <span class="kt">int</span> <span class="n">fd</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="n">fname</span><span class="p">.</span><span class="n">c_str</span><span class="p">(),</span> <span class="n">O_RDWR</span> <span class="o">|</span> <span class="n">O_CREAT</span><span class="p">,</span> <span class="mo">0644</span><span class="p">);</span>
+<span class="lineno">24</span>   <span class="k">if</span> <span class="p">(</span><span class="n">fd</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">25</span>     <span class="n">result</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">26</span>   <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">LockOrUnlock</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="nb">true</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">27</span>     <span class="n">result</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="s">&quot;lock &quot;</span> <span class="o">+</span> <span class="n">fname</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">28</span>     <span class="n">close</span><span class="p">(</span><span class="n">fd</span><span class="p">);</span>
+<span class="lineno">29</span>   <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">30</span>     <span class="n">PosixFileLock</span><span class="o">*</span> <span class="n">my_lock</span> <span class="o">=</span> <span class="k">new</span> <span class="n">PosixFileLock</span><span class="p">;</span>
+<span class="lineno">31</span>     <span class="n">my_lock</span><span class="o">-&gt;</span><span class="n">fd_</span> <span class="o">=</span> <span class="n">fd</span><span class="p">;</span>
+<span class="lineno">32</span>     <span class="o">*</span><span class="n">lock</span> <span class="o">=</span> <span class="n">my_lock</span><span class="p">;</span>
+<span class="lineno">33</span>   <span class="p">}</span>
+<span class="lineno">34</span>   <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">35</span> <span class="p">}</span>
+<span class="lineno">36</span> 
+<span class="lineno">37</span> <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">UnlockFile</span><span class="p">(</span><span class="n">FileLock</span><span class="o">*</span> <span class="n">lock</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">38</span>   <span class="n">PosixFileLock</span><span class="o">*</span> <span class="n">my_lock</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">PosixFileLock</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">lock</span><span class="p">);</span>
+<span class="lineno">39</span>   <span class="n">Status</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">40</span>   <span class="k">if</span> <span class="p">(</span><span class="n">LockOrUnlock</span><span class="p">(</span><span class="n">my_lock</span><span class="o">-&gt;</span><span class="n">fd_</span><span class="p">,</span> <span class="nb">false</span><span class="p">)</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">41</span>     <span class="n">result</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="s">&quot;unlock&quot;</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">42</span>   <span class="p">}</span>
+<span class="lineno">43</span>   <span class="n">close</span><span class="p">(</span><span class="n">my_lock</span><span class="o">-&gt;</span><span class="n">fd_</span><span class="p">);</span>
+<span class="lineno">44</span>   <span class="k">delete</span> <span class="n">my_lock</span><span class="p">;</span>
+<span class="lineno">45</span>   <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">46</span> <span class="p">}</span></code></pre></div>
+
+<p>我们看到PosixFileLock数据结构是被PosixEnv类用来实现LockFile和UnlockFile方法。PosixFileLock其实就是一个抽象出来的锁句柄，这个类里面只有一个成员变量：文件描述符fd。而在PosixEnv的LockFile和UnlockFile方法中，实现文件锁的核心代码就在函数<code>LockOrUnlock</code>中：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="kt">int</span> <span class="nf">LockOrUnlock</span><span class="p">(</span><span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="kt">bool</span> <span class="n">lock</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>   <span class="n">errno</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 3</span>   <span class="k">struct</span> <span class="n">flock</span> <span class="n">f</span><span class="p">;</span>
+<span class="lineno"> 4</span>   <span class="n">memset</span><span class="p">(</span><span class="o">&amp;</span><span class="n">f</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">f</span><span class="p">));</span>
+<span class="lineno"> 5</span>   <span class="n">f</span><span class="p">.</span><span class="n">l_type</span> <span class="o">=</span> <span class="p">(</span><span class="n">lock</span> <span class="o">?</span> <span class="nl">F_WRLCK</span> <span class="p">:</span> <span class="n">F_UNLCK</span><span class="p">);</span>
+<span class="lineno"> 6</span>   <span class="n">f</span><span class="p">.</span><span class="n">l_whence</span> <span class="o">=</span> <span class="n">SEEK_SET</span><span class="p">;</span>
+<span class="lineno"> 7</span>   <span class="n">f</span><span class="p">.</span><span class="n">l_start</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 8</span>   <span class="n">f</span><span class="p">.</span><span class="n">l_len</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>        <span class="c1">// Lock/unlock entire file</span>
+<span class="lineno"> 9</span>   <span class="k">return</span> <span class="n">fcntl</span><span class="p">(</span><span class="n">fd</span><span class="p">,</span> <span class="n">F_SETLK</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">f</span><span class="p">);</span>
+<span class="lineno">10</span> <span class="p">}</span></code></pre></div>
+
+<p>这段代码是很简单的，直接调用Unix系统调用fcntl对文件进行加锁解锁操作。关于Unix文件锁，不清楚的同学们可以自行去查看APUE第二版的14.3节。</p>
+
+<p>接下来我们去看<code>class RandomAccessFile</code>，其声明在<strong>include/leveldb/env.h</strong>中：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// A file abstraction for randomly reading the contents of a file.</span>
+<span class="lineno"> 2</span> <span class="k">class</span> <span class="nc">RandomAccessFile</span> <span class="p">{</span>
+<span class="lineno"> 3</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 4</span>   <span class="n">RandomAccessFile</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 5</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">RandomAccessFile</span><span class="p">();</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>   <span class="c1">// Read up to &quot;n&quot; bytes from the file starting at &quot;offset&quot;.</span>
+<span class="lineno"> 8</span>   <span class="c1">// &quot;scratch[0..n-1]&quot; may be written by this routine.  Sets &quot;*result&quot;</span>
+<span class="lineno"> 9</span>   <span class="c1">// to the data that was read (including if fewer than &quot;n&quot; bytes were</span>
+<span class="lineno">10</span>   <span class="c1">// successfully read).  May set &quot;*result&quot; to point at data in</span>
+<span class="lineno">11</span>   <span class="c1">// &quot;scratch[0..n-1]&quot;, so &quot;scratch[0..n-1]&quot; must be live when</span>
+<span class="lineno">12</span>   <span class="c1">// &quot;*result&quot; is used.  If an error was encountered, returns a non-OK</span>
+<span class="lineno">13</span>   <span class="c1">// status.</span>
+<span class="lineno">14</span>   <span class="c1">//</span>
+<span class="lineno">15</span>   <span class="c1">// Safe for concurrent use by multiple threads.</span>
+<span class="lineno">16</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Read</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">offset</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">result</span><span class="p">,</span>
+<span class="lineno">17</span>                       <span class="kt">char</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="k">const</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">18</span> <span class="p">};</span></code></pre></div>
+
+<p>我们从注释中看到，这里的Read接口的实现需要是线程安全的。另外这个Read接口的参数设计得比较有意思，第三个参数是一个Slice指针，而第四个参数则是这个Slice指针指向的Slice中的字符串数组。这样设计的好处就是显式指定了存储数据的缓冲区，避免在函数内部进行内存分配，同时<strong>可以由调用者自己来管理Slice的内存，尽可能地减少不必要的数据拷贝。试想，如果直接传一个Slice指针进去，就无法自己去管理Slice的内存(因为无法知道Slice的内存是调用者分配的还是函数内部分配的)，那么在很多场景下就无法避免不必要的数据拷贝</strong>，从这里也可以看出为什么作者要自己封装一个Slice数据结构，而不直接使用std::string，就是因为std::string不允许调用者直接去写它的字符串数组（注意<code>std::string</code>提供的<code>c_str()</code>方法的定义是<a href="http://www.cplusplus.com/reference/string/string/c_str/"><code>const char *std::string::c_str() const</code></a>）</p>
+
+<p>接下来去看看<code>RandomAccessFile</code>的具体实现，在util/env_posix.cc中有一个<code>NewRandomAccessFile</code>方法，我们从这里出发，去看看Posix环境下的RandomAccessFile的实现：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">NewRandomAccessFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span>
+<span class="lineno"> 2</span>                                    <span class="n">RandomAccessFile</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>   <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno"> 4</span>   <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno"> 5</span>   <span class="kt">int</span> <span class="n">fd</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="n">fname</span><span class="p">.</span><span class="n">c_str</span><span class="p">(),</span> <span class="n">O_RDONLY</span><span class="p">);</span>
+<span class="lineno"> 6</span>   <span class="k">if</span> <span class="p">(</span><span class="n">fd</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 7</span>     <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno"> 8</span>   <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="k">sizeof</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">8</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 9</span>     <span class="c1">// Use mmap when virtual address-space is plentiful.</span>
+<span class="lineno">10</span>     <span class="kt">uint64_t</span> <span class="n">size</span><span class="p">;</span>
+<span class="lineno">11</span>     <span class="n">s</span> <span class="o">=</span> <span class="n">GetFileSize</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">);</span> <span class="c1">// 这里的实现是直接调用stat获取文件属性，得到文件大小</span>
+<span class="lineno">12</span>     <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">13</span>       <span class="kt">void</span><span class="o">*</span> <span class="n">base</span> <span class="o">=</span> <span class="n">mmap</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="n">size</span><span class="p">,</span> <span class="n">PROT_READ</span><span class="p">,</span> <span class="n">MAP_SHARED</span><span class="p">,</span> <span class="n">fd</span><span class="p">,</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">14</span>       <span class="k">if</span> <span class="p">(</span><span class="n">base</span> <span class="o">!=</span> <span class="n">MAP_FAILED</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">15</span>         <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="n">PosixMmapReadableFile</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">base</span><span class="p">,</span> <span class="n">size</span><span class="p">);</span>
+<span class="lineno">16</span>       <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">17</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">18</span>       <span class="p">}</span>
+<span class="lineno">19</span>     <span class="p">}</span>
+<span class="lineno">20</span>     <span class="n">close</span><span class="p">(</span><span class="n">fd</span><span class="p">);</span>
+<span class="lineno">21</span>   <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">22</span>     <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="n">PosixRandomAccessFile</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">fd</span><span class="p">);</span>
+<span class="lineno">23</span>   <span class="p">}</span>
+<span class="lineno">24</span>   <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">25</span> <span class="p">}</span></code></pre></div>
+
+<p>注意这里的第8行，当<code>sizeof(void *) &gt;= 8</code>时，作者的注释是说虚拟内存充裕，于是使用PosixMmapReadableFile，PosixMmapReadableFile的实现是使用一块被mmap的内存，这样可以加快读的速度。当然，这里使用mmap的不足之处就是一下子把整个文件映射到了内存，如果实际需求只是读取文件中的一小块数据，这样做就会浪费很多内存。所以作者对sizeof(void *)做了判断。当sizeof(void *)的值是8的时候，说明运行环境是64位机。因此只在64位以上的机器环境下，认定虚拟地址充裕，才使用mmap来辅助随机读。这里插一句话，以前去面试过一家公司，面试我的人以前在阿里是P9，当我说我读过一些redis源码的时候，他问我32位redis和64位redis有什么不同。我当时懵了，不知道该怎么回答。后来请教我师父，他说这个应该跟物理内存不足的时候会使用到swap有关系。读了这里的源码，我突然间有点感悟，64位机的虚拟内存充裕，因此可能会在涉及磁盘io的情况下能够利用mmap等技术做更多的读写优化。</p>
+
+<p>继续顺着代码看，看看<code>PosixMmapReadableFile</code>和<code>PosixRandomAccessFile</code>分别是怎么去实现的：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// mmap() based random-access</span>
+<span class="lineno"> 2</span> <span class="k">class</span> <span class="nc">PosixMmapReadableFile</span><span class="o">:</span> <span class="k">public</span> <span class="n">RandomAccessFile</span> <span class="p">{</span>
+<span class="lineno"> 3</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno"> 4</span>   <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">filename_</span><span class="p">;</span>
+<span class="lineno"> 5</span>   <span class="kt">void</span><span class="o">*</span> <span class="n">mmapped_region_</span><span class="p">;</span>
+<span class="lineno"> 6</span>   <span class="kt">size_t</span> <span class="n">length_</span><span class="p">;</span>
+<span class="lineno"> 7</span> 
+<span class="lineno"> 8</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 9</span>   <span class="c1">// base[0,length-1] contains the mmapped contents of the file.</span>
+<span class="lineno">10</span>   <span class="n">PosixMmapReadableFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">base</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">length</span><span class="p">)</span>
+<span class="lineno">11</span>       <span class="o">:</span> <span class="n">filename_</span><span class="p">(</span><span class="n">fname</span><span class="p">),</span> <span class="n">mmapped_region_</span><span class="p">(</span><span class="n">base</span><span class="p">),</span> <span class="n">length_</span><span class="p">(</span><span class="n">length</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno">12</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">PosixMmapReadableFile</span><span class="p">()</span> <span class="p">{</span> <span class="n">munmap</span><span class="p">(</span><span class="n">mmapped_region_</span><span class="p">,</span> <span class="n">length_</span><span class="p">);</span> <span class="p">}</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Read</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">offset</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">result</span><span class="p">,</span>
+<span class="lineno">15</span>                       <span class="kt">char</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno">16</span>     <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">17</span>     <span class="k">if</span> <span class="p">(</span><span class="n">offset</span> <span class="o">+</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="n">length_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">18</span>       <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="n">Slice</span><span class="p">();</span>
+<span class="lineno">19</span>       <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">EINVAL</span><span class="p">);</span>
+<span class="lineno">20</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">21</span>       <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="n">Slice</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">mmapped_region_</span><span class="p">)</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="n">n</span><span class="p">);</span>
+<span class="lineno">22</span>     <span class="p">}</span>
+<span class="lineno">23</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">24</span>   <span class="p">}</span>
+<span class="lineno">25</span> <span class="p">};</span>
+<span class="lineno">26</span> 
+<span class="lineno">27</span> <span class="c1">// pread() based random-access</span>
+<span class="lineno">28</span> <span class="k">class</span> <span class="nc">PosixRandomAccessFile</span><span class="o">:</span> <span class="k">public</span> <span class="n">RandomAccessFile</span> <span class="p">{</span>
+<span class="lineno">29</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno">30</span>   <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">filename_</span><span class="p">;</span>
+<span class="lineno">31</span>   <span class="kt">int</span> <span class="n">fd_</span><span class="p">;</span>
+<span class="lineno">32</span> 
+<span class="lineno">33</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno">34</span>   <span class="n">PosixRandomAccessFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="kt">int</span> <span class="n">fd</span><span class="p">)</span>
+<span class="lineno">35</span>       <span class="o">:</span> <span class="n">filename_</span><span class="p">(</span><span class="n">fname</span><span class="p">),</span> <span class="n">fd_</span><span class="p">(</span><span class="n">fd</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno">36</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">PosixRandomAccessFile</span><span class="p">()</span> <span class="p">{</span> <span class="n">close</span><span class="p">(</span><span class="n">fd_</span><span class="p">);</span> <span class="p">}</span>
+<span class="lineno">37</span> 
+<span class="lineno">38</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Read</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">offset</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">result</span><span class="p">,</span>
+<span class="lineno">39</span>                       <span class="kt">char</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno">40</span>     <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">41</span>     <span class="kt">ssize_t</span> <span class="n">r</span> <span class="o">=</span> <span class="n">pread</span><span class="p">(</span><span class="n">fd_</span><span class="p">,</span> <span class="n">scratch</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">off_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">offset</span><span class="p">));</span>
+<span class="lineno">42</span>     <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="n">Slice</span><span class="p">(</span><span class="n">scratch</span><span class="p">,</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="o">?</span> <span class="mi">0</span> <span class="o">:</span> <span class="n">r</span><span class="p">);</span>
+<span class="lineno">43</span>     <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">44</span>       <span class="c1">// An error: return a non-ok status</span>
+<span class="lineno">45</span>       <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">46</span>     <span class="p">}</span>
+<span class="lineno">47</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">48</span>   <span class="p">}</span>
+<span class="lineno">49</span> <span class="p">};</span></code></pre></div>
+
+<p>这两个类的实现都很简单，主要是注意一些细节问题。注意在<code>NewRandomAccessFile</code>调用<code>new PosixMmapReadableFile</code>之前，使用了mmap把文件映射到了虚拟内存，因此在<code>PosixMmapReadableFile</code>的析构函数中需要调用munmap释放内存。同时由于使用了mmap映射了内存，并且这个类是用于随机读文件的，不涉及写操作，因此调用完mmap就可以把文件关闭了。因此关闭文件的操作在<code>NewRandomAccessFile</code>中进行了，<code>PosixMmapReadableFile</code>的析构文件中就不需要再关闭文件了。另外由于文件的内容已经映射进内存了，就不需要再进行不必要的拷贝，于是Read接口直接把Slice的data_指针指向映射的内存区域。而<code>PosixRandomAccessFile</code>使用了pread来实现随机的线程安全读写（注意不能先使用seek再read，这样不是原子性的，不满足线程安全），另外在析构函数中需要去close文件。</p>
+
+<p>现在来看<code>class SequentialFile</code>，依然先读<strong>include/leveldb/SequentialFile</strong>中的声明：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// A file abstraction for reading sequentially through a file</span>
+<span class="lineno"> 2</span> <span class="k">class</span> <span class="nc">SequentialFile</span> <span class="p">{</span>
+<span class="lineno"> 3</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 4</span>   <span class="n">SequentialFile</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 5</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">SequentialFile</span><span class="p">();</span>
+<span class="lineno"> 6</span> 
+<span class="lineno"> 7</span>   <span class="c1">// Read up to &quot;n&quot; bytes from the file.  &quot;scratch[0..n-1]&quot; may be</span>
+<span class="lineno"> 8</span>   <span class="c1">// written by this routine.  Sets &quot;*result&quot; to the data that was</span>
+<span class="lineno"> 9</span>   <span class="c1">// read (including if fewer than &quot;n&quot; bytes were successfully read).</span>
+<span class="lineno">10</span>   <span class="c1">// May set &quot;*result&quot; to point at data in &quot;scratch[0..n-1]&quot;, so</span>
+<span class="lineno">11</span>   <span class="c1">// &quot;scratch[0..n-1]&quot; must be live when &quot;*result&quot; is used.</span>
+<span class="lineno">12</span>   <span class="c1">// If an error was encountered, returns a non-OK status.</span>
+<span class="lineno">13</span>   <span class="c1">//</span>
+<span class="lineno">14</span>   <span class="c1">// REQUIRES: External synchronization</span>
+<span class="lineno">15</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Read</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">result</span><span class="p">,</span> <span class="kt">char</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">16</span> 
+<span class="lineno">17</span>   <span class="c1">// Skip &quot;n&quot; bytes from the file. This is guaranteed to be no</span>
+<span class="lineno">18</span>   <span class="c1">// slower that reading the same data, but may be faster.</span>
+<span class="lineno">19</span>   <span class="c1">//</span>
+<span class="lineno">20</span>   <span class="c1">// If end of file is reached, skipping will stop at the end of the</span>
+<span class="lineno">21</span>   <span class="c1">// file, and Skip will return OK.</span>
+<span class="lineno">22</span>   <span class="c1">//</span>
+<span class="lineno">23</span>   <span class="c1">// REQUIRES: External synchronization</span>
+<span class="lineno">24</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Skip</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">n</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">25</span> <span class="p">};</span></code></pre></div>
+
+<p>从注释中看到，这是一个顺序读文件的抽象，提供了两个接口，一个是Read，从当前位置读n字节，另一个操作是跳过n字节，这个操作保证不比Read慢。另外，注意注释中的REQUIRES，这是说调用者需要保证对这两个接口的调用是同步的。然后我们去util/posix_env.cc看看PosixEnv下对这两个接口的实现：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">NewSequentialFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span>
+<span class="lineno"> 2</span>                                  <span class="n">SequentialFile</span><span class="o">**</span> <span class="n">result</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>   <span class="kt">FILE</span><span class="o">*</span> <span class="n">f</span> <span class="o">=</span> <span class="n">fopen</span><span class="p">(</span><span class="n">fname</span><span class="p">.</span><span class="n">c_str</span><span class="p">(),</span> <span class="s">&quot;r&quot;</span><span class="p">);</span>
+<span class="lineno"> 4</span>   <span class="k">if</span> <span class="p">(</span><span class="n">f</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 5</span>     <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno"> 6</span>     <span class="k">return</span> <span class="n">IOError</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno"> 7</span>   <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno"> 8</span>     <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="n">PosixSequentialFile</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span> <span class="n">f</span><span class="p">);</span>
+<span class="lineno"> 9</span>     <span class="k">return</span> <span class="n">Status</span><span class="o">::</span><span class="n">OK</span><span class="p">();</span>
+<span class="lineno">10</span>   <span class="p">}</span>
+<span class="lineno">11</span> <span class="p">}</span>
+<span class="lineno">12</span> 
+<span class="lineno">13</span> <span class="k">class</span> <span class="nc">PosixSequentialFile</span><span class="o">:</span> <span class="k">public</span> <span class="n">SequentialFile</span> <span class="p">{</span>
+<span class="lineno">14</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno">15</span>   <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">filename_</span><span class="p">;</span>
+<span class="lineno">16</span>   <span class="kt">FILE</span><span class="o">*</span> <span class="n">file_</span><span class="p">;</span>
+<span class="lineno">17</span> 
+<span class="lineno">18</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno">19</span>   <span class="n">PosixSequentialFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="kt">FILE</span><span class="o">*</span> <span class="n">f</span><span class="p">)</span>
+<span class="lineno">20</span>       <span class="o">:</span> <span class="n">filename_</span><span class="p">(</span><span class="n">fname</span><span class="p">),</span> <span class="n">file_</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno">21</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">PosixSequentialFile</span><span class="p">()</span> <span class="p">{</span> <span class="n">fclose</span><span class="p">(</span><span class="n">file_</span><span class="p">);</span> <span class="p">}</span>
+<span class="lineno">22</span> 
+<span class="lineno">23</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Read</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="n">Slice</span><span class="o">*</span> <span class="n">result</span><span class="p">,</span> <span class="kt">char</span><span class="o">*</span> <span class="n">scratch</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">24</span>     <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">25</span>     <span class="c1">// 使用fread_unlocked是因为在函数之外对文件访问已经做了同步(调用者保证)</span>
+<span class="lineno">26</span>     <span class="kt">size_t</span> <span class="n">r</span> <span class="o">=</span> <span class="n">fread_unlocked</span><span class="p">(</span><span class="n">scratch</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">file_</span><span class="p">);</span>
+<span class="lineno">27</span>     <span class="o">*</span><span class="n">result</span> <span class="o">=</span> <span class="n">Slice</span><span class="p">(</span><span class="n">scratch</span><span class="p">,</span> <span class="n">r</span><span class="p">);</span>
+<span class="lineno">28</span>     <span class="k">if</span> <span class="p">(</span><span class="n">r</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">29</span>       <span class="k">if</span> <span class="p">(</span><span class="n">feof</span><span class="p">(</span><span class="n">file_</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">30</span>         <span class="c1">// We leave status as ok if we hit the end of the file</span>
+<span class="lineno">31</span>       <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">32</span>         <span class="c1">// A partial read with an error: return a non-ok status</span>
+<span class="lineno">33</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">34</span>       <span class="p">}</span>
+<span class="lineno">35</span>     <span class="p">}</span>
+<span class="lineno">36</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">37</span>   <span class="p">}</span>
+<span class="lineno">38</span> 
+<span class="lineno">39</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Skip</span><span class="p">(</span><span class="kt">uint64_t</span> <span class="n">n</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">40</span>     <span class="k">if</span> <span class="p">(</span><span class="n">fseek</span><span class="p">(</span><span class="n">file_</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">SEEK_CUR</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">41</span>       <span class="k">return</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">42</span>     <span class="p">}</span>
+<span class="lineno">43</span>     <span class="k">return</span> <span class="n">Status</span><span class="o">::</span><span class="n">OK</span><span class="p">();</span>
+<span class="lineno">44</span>   <span class="p">}</span>
+<span class="lineno">45</span> <span class="p">};</span></code></pre></div>
+
+<p>这段代码中唯一一个可能造成疑惑的点就是第26行，这里是因为Read接口和Skip接口需要调用者自己去保证同步（见声明中的注释），所以这里可以调用<code>fread_unlocked</code>代替<code>fread</code>用以提高性能。</p>
+
+<p>接下来我们来看<code>class WritableFile</code>在<strong>include/leveldb/env.h</strong>中的声明：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// A file abstraction for sequential writing.  The implementation</span>
+<span class="lineno"> 2</span> <span class="c1">// must provide buffering since callers may append small fragments</span>
+<span class="lineno"> 3</span> <span class="c1">// at a time to the file.</span>
+<span class="lineno"> 4</span> <span class="k">class</span> <span class="nc">WritableFile</span> <span class="p">{</span>
+<span class="lineno"> 5</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 6</span>   <span class="n">WritableFile</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno"> 7</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">WritableFile</span><span class="p">();</span>
+<span class="lineno"> 8</span> 
+<span class="lineno"> 9</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Append</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">data</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">10</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Close</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">11</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Flush</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">12</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Sync</span><span class="p">()</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno">15</span>   <span class="c1">// No copying allowed</span>
+<span class="lineno">16</span>   <span class="n">WritableFile</span><span class="p">(</span><span class="k">const</span> <span class="n">WritableFile</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">17</span>   <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">WritableFile</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">18</span> <span class="p">};</span></code></pre></div>
+
+<p><code>class WritableFile</code>需要实现接口<code>Append, Close, Flush, Sync</code>，在util/env_posix.cc中，对WritableFile的实现是<code>PosixMmapFile</code>:</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="c1">// We preallocate up to an extra megabyte and use memcpy to append new</span>
+<span class="lineno"> 2</span> <span class="c1">// data to the file.  This is safe since we either properly close the</span>
+<span class="lineno"> 3</span> <span class="c1">// file before reading from it, or for log files, the reading code</span>
+<span class="lineno"> 4</span> <span class="c1">// knows enough to skip zero suffixes.</span>
+<span class="lineno"> 5</span> <span class="k">class</span> <span class="nc">PosixMmapFile</span> <span class="o">:</span> <span class="k">public</span> <span class="n">WritableFile</span> <span class="p">{</span>
+<span class="lineno"> 6</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno"> 7</span>   <span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="n">filename_</span><span class="p">;</span>
+<span class="lineno"> 8</span>   <span class="kt">int</span> <span class="n">fd_</span><span class="p">;</span>
+<span class="lineno"> 9</span>   <span class="kt">size_t</span> <span class="n">page_size_</span><span class="p">;</span>
+<span class="lineno">10</span>   <span class="kt">size_t</span> <span class="n">map_size_</span><span class="p">;</span>       <span class="c1">// How much extra memory to map at a time</span>
+<span class="lineno">11</span>   <span class="kt">char</span><span class="o">*</span> <span class="n">base_</span><span class="p">;</span>            <span class="c1">// The mapped region</span>
+<span class="lineno">12</span>   <span class="kt">char</span><span class="o">*</span> <span class="n">limit_</span><span class="p">;</span>           <span class="c1">// Limit of the mapped region</span>
+<span class="lineno">13</span>   <span class="kt">char</span><span class="o">*</span> <span class="n">dst_</span><span class="p">;</span>             <span class="c1">// Where to write next  (in range [base_,limit_])</span>
+<span class="lineno">14</span>   <span class="kt">char</span><span class="o">*</span> <span class="n">last_sync_</span><span class="p">;</span>       <span class="c1">// Where have we synced up to</span>
+<span class="lineno">15</span>   <span class="kt">uint64_t</span> <span class="n">file_offset_</span><span class="p">;</span>  <span class="c1">// Offset of base_ in file</span>
+<span class="lineno">16</span> 
+<span class="lineno">17</span>   <span class="c1">// Have we done an munmap of unsynced data?</span>
+<span class="lineno">18</span>   <span class="kt">bool</span> <span class="n">pending_sync_</span><span class="p">;</span>
+<span class="lineno">19</span> 
+<span class="lineno">20</span>   <span class="c1">// Roundup x to a multiple of y</span>
+<span class="lineno">21</span>   <span class="k">static</span> <span class="kt">size_t</span> <span class="nf">Roundup</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">x</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">y</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">22</span>     <span class="k">return</span> <span class="p">((</span><span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">y</span><span class="p">)</span> <span class="o">*</span> <span class="n">y</span><span class="p">;</span>
+<span class="lineno">23</span>   <span class="p">}</span>
+<span class="lineno">24</span> 
+<span class="lineno">25</span>   <span class="kt">size_t</span> <span class="nf">TruncateToPageBoundary</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">s</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">26</span>     <span class="n">s</span> <span class="o">-=</span> <span class="p">(</span><span class="n">s</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">page_size_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">));</span>
+<span class="lineno">27</span>     <span class="n">assert</span><span class="p">((</span><span class="n">s</span> <span class="o">%</span> <span class="n">page_size_</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">28</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">29</span>   <span class="p">}</span>
+<span class="lineno">30</span> 
+<span class="lineno">31</span>   <span class="kt">bool</span> <span class="nf">UnmapCurrentRegion</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">32</span>     <span class="kt">bool</span> <span class="n">result</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+<span class="lineno">33</span>     <span class="k">if</span> <span class="p">(</span><span class="n">base_</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">34</span>       <span class="k">if</span> <span class="p">(</span><span class="n">last_sync_</span> <span class="o">&lt;</span> <span class="n">limit_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">35</span>         <span class="c1">// Defer syncing this data until next Sync() call, if any</span>
+<span class="lineno">36</span>         <span class="n">pending_sync_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+<span class="lineno">37</span>       <span class="p">}</span>
+<span class="lineno">38</span>       <span class="k">if</span> <span class="p">(</span><span class="n">munmap</span><span class="p">(</span><span class="n">base_</span><span class="p">,</span> <span class="n">limit_</span> <span class="o">-</span> <span class="n">base_</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">39</span>         <span class="n">result</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="lineno">40</span>       <span class="p">}</span>
+<span class="lineno">41</span>       <span class="n">file_offset_</span> <span class="o">+=</span> <span class="n">limit_</span> <span class="o">-</span> <span class="n">base_</span><span class="p">;</span>
+<span class="lineno">42</span>       <span class="n">base_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">43</span>       <span class="n">limit_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">44</span>       <span class="n">last_sync_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">45</span>       <span class="n">dst_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">46</span> 
+<span class="lineno">47</span>       <span class="c1">// Increase the amount we map the next time, but capped at 1MB</span>
+<span class="lineno">48</span>       <span class="k">if</span> <span class="p">(</span><span class="n">map_size_</span> <span class="o">&lt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">&lt;&lt;</span><span class="mi">20</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">49</span>         <span class="n">map_size_</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="lineno">50</span>       <span class="p">}</span>
+<span class="lineno">51</span>     <span class="p">}</span>
+<span class="lineno">52</span>     <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">53</span>   <span class="p">}</span>
+<span class="lineno">54</span> 
+<span class="lineno">55</span>   <span class="kt">bool</span> <span class="nf">MapNewRegion</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">56</span>     <span class="n">assert</span><span class="p">(</span><span class="n">base_</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">);</span>
+<span class="lineno">57</span>     <span class="k">if</span> <span class="p">(</span><span class="n">ftruncate</span><span class="p">(</span><span class="n">fd_</span><span class="p">,</span> <span class="n">file_offset_</span> <span class="o">+</span> <span class="n">map_size_</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">58</span>       <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
+<span class="lineno">59</span>     <span class="p">}</span>
+<span class="lineno">60</span>     <span class="kt">void</span><span class="o">*</span> <span class="n">ptr</span> <span class="o">=</span> <span class="n">mmap</span><span class="p">(</span><span class="nb">NULL</span><span class="p">,</span> <span class="n">map_size_</span><span class="p">,</span> <span class="n">PROT_READ</span> <span class="o">|</span> <span class="n">PROT_WRITE</span><span class="p">,</span> <span class="n">MAP_SHARED</span><span class="p">,</span>
+<span class="lineno">61</span>                      <span class="n">fd_</span><span class="p">,</span> <span class="n">file_offset_</span><span class="p">);</span>
+<span class="lineno">62</span>     <span class="k">if</span> <span class="p">(</span><span class="n">ptr</span> <span class="o">==</span> <span class="n">MAP_FAILED</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">63</span>       <span class="k">return</span> <span class="nb">false</span><span class="p">;</span>
+<span class="lineno">64</span>     <span class="p">}</span>
+<span class="lineno">65</span>     <span class="n">base_</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<span class="lineno">66</span>     <span class="n">limit_</span> <span class="o">=</span> <span class="n">base_</span> <span class="o">+</span> <span class="n">map_size_</span><span class="p">;</span>
+<span class="lineno">67</span>     <span class="n">dst_</span> <span class="o">=</span> <span class="n">base_</span><span class="p">;</span>
+<span class="lineno">68</span>     <span class="n">last_sync_</span> <span class="o">=</span> <span class="n">base_</span><span class="p">;</span>
+<span class="lineno">69</span>     <span class="k">return</span> <span class="nb">true</span><span class="p">;</span>
+<span class="lineno">70</span>   <span class="p">}</span></code></pre></div>
+
+<p><code>PosixMmapFile</code>的实现原理是通过mmap按pagesize映射文件，通过memcpy到映射的内存，实现文件的高效追加写。我们顺着代码来分析它的成员函数。第21行，辅助函数<code>Roundup</code>是用来实现对齐，这是因为mmap映射的内存要求是按页对齐的，所以如果要映射一块大小为x的内存，就应该使用 <code>x = Roundup(x, pagesize)</code>这样的代码来保证按页面对齐（假设某个操作系统的页大小为256，如果希望映射文件中一段4000字节的内容到内存，则应该调用：Roundup(4000, 256) = 4096）。</p>
+
+<p><code>TruncateToPageBoundary(size_t s)</code>是获取地址s所在的页基址。注意这个函数实现的代码为<code>s -= (s &amp; (page_size_ - 1));</code>，由于<code>page_size_</code>一定是2的N次幂，所以<code>page_size_ - 1</code>的二进制表示正好是000…111这样的形式，因此这个算式就把s置为其所在页的页基址。而<code>MapNewRegion</code>和<code>UnmapCurrentRegion</code>这两个函数顾名思义，就是把顺着文件的末尾，map一块新的区域到内存和unmap当前的区域。对这两个函数，只需要搞懂<code>ftruncate</code>, <code>mmap</code>和<code>munmap</code>这三个系统函数的作用和各个参数的含义，就能看懂其逻辑，因此这里也不赘述了。接下来分析<code>PosixMmapFile</code>的public函数。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="n">PosixMmapFile</span><span class="p">(</span><span class="k">const</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&amp;</span> <span class="n">fname</span><span class="p">,</span> <span class="kt">int</span> <span class="n">fd</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">page_size</span><span class="p">)</span>
+<span class="lineno"> 2</span>       <span class="o">:</span> <span class="n">filename_</span><span class="p">(</span><span class="n">fname</span><span class="p">),</span>
+<span class="lineno"> 3</span>         <span class="n">fd_</span><span class="p">(</span><span class="n">fd</span><span class="p">),</span>
+<span class="lineno"> 4</span>         <span class="n">page_size_</span><span class="p">(</span><span class="n">page_size</span><span class="p">),</span>
+<span class="lineno"> 5</span>         <span class="n">map_size_</span><span class="p">(</span><span class="n">Roundup</span><span class="p">(</span><span class="mi">65536</span><span class="p">,</span> <span class="n">page_size</span><span class="p">)),</span>
+<span class="lineno"> 6</span>         <span class="n">base_</span><span class="p">(</span><span class="nb">NULL</span><span class="p">),</span>
+<span class="lineno"> 7</span>         <span class="n">limit_</span><span class="p">(</span><span class="nb">NULL</span><span class="p">),</span>
+<span class="lineno"> 8</span>         <span class="n">dst_</span><span class="p">(</span><span class="nb">NULL</span><span class="p">),</span>
+<span class="lineno"> 9</span>         <span class="n">last_sync_</span><span class="p">(</span><span class="nb">NULL</span><span class="p">),</span>
+<span class="lineno">10</span>         <span class="n">file_offset_</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+<span class="lineno">11</span>         <span class="n">pending_sync_</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">12</span>     <span class="n">assert</span><span class="p">((</span><span class="n">page_size</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">page_size</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">13</span>   <span class="p">}</span>
+<span class="lineno">14</span> 
+<span class="lineno">15</span>   <span class="o">~</span><span class="n">PosixMmapFile</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">16</span>     <span class="k">if</span> <span class="p">(</span><span class="n">fd_</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">17</span>       <span class="n">PosixMmapFile</span><span class="o">::</span><span class="n">Close</span><span class="p">();</span>
+<span class="lineno">18</span>     <span class="p">}</span>
+<span class="lineno">19</span>   <span class="p">}</span>
+<span class="lineno">20</span> 
+<span class="lineno">21</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="n">Close</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">22</span>     <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">23</span>     <span class="kt">size_t</span> <span class="n">unused</span> <span class="o">=</span> <span class="n">limit_</span> <span class="o">-</span> <span class="n">dst_</span><span class="p">;</span>
+<span class="lineno">24</span>     <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">UnmapCurrentRegion</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">25</span>       <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">26</span>     <span class="p">}</span> <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">unused</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">27</span>       <span class="c1">// Trim the extra space at the end of the file</span>
+<span class="lineno">28</span>       <span class="k">if</span> <span class="p">(</span><span class="n">ftruncate</span><span class="p">(</span><span class="n">fd_</span><span class="p">,</span> <span class="n">file_offset_</span> <span class="o">-</span> <span class="n">unused</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">29</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">30</span>       <span class="p">}</span>
+<span class="lineno">31</span>     <span class="p">}</span>
+<span class="lineno">32</span> 
+<span class="lineno">33</span>     <span class="k">if</span> <span class="p">(</span><span class="n">close</span><span class="p">(</span><span class="n">fd_</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">34</span>       <span class="k">if</span> <span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">ok</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">35</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">36</span>       <span class="p">}</span>
+<span class="lineno">37</span>     <span class="p">}</span>
+<span class="lineno">38</span> 
+<span class="lineno">39</span>     <span class="n">fd_</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+<span class="lineno">40</span>     <span class="n">base_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">41</span>     <span class="n">limit_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="lineno">42</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">43</span>   <span class="p">}</span></code></pre></div>
+
+<p>构造函数主要是初始化成员变量，其中map_size_初始化为<code>Roundup(65536, page_size)</code>，65536是2的16次方，而通常来说，page_size是4096(2的12次方)，Roundup(65536, 4096) == 65536，因此在普通的服务器上，是一次映射16个页面。回顾我们前面对<code>TruncateToPageBoundary</code>的分析，其中谈到page_size_成员变量的值必须是2的整数次幂，在构造函数体中，代码<code>assert((page_size &amp; (page_size - 1)) == 0);</code>保证了page_size必须是2的整数次幂。析构函数调用了<code>PosixMmapFile::Close()</code>，我们顺着调用栈来看PosixMmapFile的Close方法，Close方法首先调用<code>UnmapCurrentRegion</code>，取消内存映射，归还虚拟内存。然后判断映射的内存是否还有可用的（注意mmap的内存是在文件的末尾），如果还有可用的，说明文件末尾有文件空洞，因此要使用ftruncate调整文件的大小。之后再调用系统调用<code>close</code>，并把相关的成员变量赋为-1或者NULL，完成清理工作。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">Append</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">data</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">src</span> <span class="o">=</span> <span class="n">data</span><span class="p">.</span><span class="n">data</span><span class="p">();</span>
+<span class="lineno"> 3</span>     <span class="kt">size_t</span> <span class="n">left</span> <span class="o">=</span> <span class="n">data</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="lineno"> 4</span>     <span class="k">while</span> <span class="p">(</span><span class="n">left</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 5</span>       <span class="n">assert</span><span class="p">(</span><span class="n">base_</span> <span class="o">&lt;=</span> <span class="n">dst_</span><span class="p">);</span>
+<span class="lineno"> 6</span>       <span class="n">assert</span><span class="p">(</span><span class="n">dst_</span> <span class="o">&lt;=</span> <span class="n">limit_</span><span class="p">);</span>
+<span class="lineno"> 7</span>       <span class="kt">size_t</span> <span class="n">avail</span> <span class="o">=</span> <span class="n">limit_</span> <span class="o">-</span> <span class="n">dst_</span><span class="p">;</span>
+<span class="lineno"> 8</span>       <span class="k">if</span> <span class="p">(</span><span class="n">avail</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 9</span>         <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">UnmapCurrentRegion</span><span class="p">()</span> <span class="o">||</span>
+<span class="lineno">10</span>             <span class="o">!</span><span class="n">MapNewRegion</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">11</span>           <span class="k">return</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">12</span>         <span class="p">}</span>
+<span class="lineno">13</span>       <span class="p">}</span>
+<span class="lineno">14</span> 
+<span class="lineno">15</span>       <span class="kt">size_t</span> <span class="n">n</span> <span class="o">=</span> <span class="p">(</span><span class="n">left</span> <span class="o">&lt;=</span> <span class="n">avail</span><span class="p">)</span> <span class="o">?</span> <span class="nl">left</span> <span class="p">:</span> <span class="n">avail</span><span class="p">;</span>
+<span class="lineno">16</span>       <span class="n">memcpy</span><span class="p">(</span><span class="n">dst_</span><span class="p">,</span> <span class="n">src</span><span class="p">,</span> <span class="n">n</span><span class="p">);</span>
+<span class="lineno">17</span>       <span class="n">dst_</span> <span class="o">+=</span> <span class="n">n</span><span class="p">;</span>
+<span class="lineno">18</span>       <span class="n">src</span> <span class="o">+=</span> <span class="n">n</span><span class="p">;</span>
+<span class="lineno">19</span>       <span class="n">left</span> <span class="o">-=</span> <span class="n">n</span><span class="p">;</span>
+<span class="lineno">20</span>     <span class="p">}</span>
+<span class="lineno">21</span>     <span class="k">return</span> <span class="n">Status</span><span class="o">::</span><span class="n">OK</span><span class="p">();</span>
+<span class="lineno">22</span>   <span class="p">}</span>
+<span class="lineno">23</span> 
+<span class="lineno">24</span>   <span class="k">virtual</span> <span class="n">Status</span> <span class="nf">Sync</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">25</span>     <span class="n">Status</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">26</span> 
+<span class="lineno">27</span>     <span class="k">if</span> <span class="p">(</span><span class="n">pending_sync_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">28</span>       <span class="c1">// Some unmapped data was not synced</span>
+<span class="lineno">29</span>       <span class="n">pending_sync_</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="lineno">30</span>       <span class="k">if</span> <span class="p">(</span><span class="n">fdatasync</span><span class="p">(</span><span class="n">fd_</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">31</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">32</span>       <span class="p">}</span>
+<span class="lineno">33</span>     <span class="p">}</span>
+<span class="lineno">34</span> 
+<span class="lineno">35</span>     <span class="k">if</span> <span class="p">(</span><span class="n">dst_</span> <span class="o">&gt;</span> <span class="n">last_sync_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">36</span>       <span class="c1">// Find the beginnings of the pages that contain the first and last</span>
+<span class="lineno">37</span>       <span class="c1">// bytes to be synced.</span>
+<span class="lineno">38</span>       <span class="kt">size_t</span> <span class="n">p1</span> <span class="o">=</span> <span class="n">TruncateToPageBoundary</span><span class="p">(</span><span class="n">last_sync_</span> <span class="o">-</span> <span class="n">base_</span><span class="p">);</span>
+<span class="lineno">39</span>       <span class="kt">size_t</span> <span class="n">p2</span> <span class="o">=</span> <span class="n">TruncateToPageBoundary</span><span class="p">(</span><span class="n">dst_</span> <span class="o">-</span> <span class="n">base_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">);</span>
+<span class="lineno">40</span>       <span class="n">last_sync_</span> <span class="o">=</span> <span class="n">dst_</span><span class="p">;</span>
+<span class="lineno">41</span>       <span class="k">if</span> <span class="p">(</span><span class="n">msync</span><span class="p">(</span><span class="n">base_</span> <span class="o">+</span> <span class="n">p1</span><span class="p">,</span> <span class="n">p2</span> <span class="o">-</span> <span class="n">p1</span> <span class="o">+</span> <span class="n">page_size_</span><span class="p">,</span> <span class="n">MS_SYNC</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">42</span>         <span class="n">s</span> <span class="o">=</span> <span class="n">IOError</span><span class="p">(</span><span class="n">filename_</span><span class="p">,</span> <span class="n">errno</span><span class="p">);</span>
+<span class="lineno">43</span>       <span class="p">}</span>
+<span class="lineno">44</span>     <span class="p">}</span>
+<span class="lineno">45</span> 
+<span class="lineno">46</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
+<span class="lineno">47</span>   <span class="p">}</span></code></pre></div>
+
+<p><code>PosixMmapFile</code>还剩下两个成员函数，<code>Append</code>和<code>Sync</code>。这两个函数的逻辑都很简单。<code>Append</code>是顺着映射的内存写（使用memcpy完成写操作），如果写到了映射的边界，就先<code>UnmapCurrentRegion</code>，再调用<code>MapNewRegion</code>函数在文件的末尾再映射一块新的内存继续写，直至写完。<code>Sync</code>函数完成同步操作。首先判断是否<code>pending_sync_</code>是否为<strong>true</strong>，如果为true，说明在上次UnmapRegion之时，还没有做过fdatasync操作（munmap的时候，OS会把unmap的内存中的内容刷进文件，但是OS默认是异步刷盘，因此这里调用fdatasync完成同步）。然后判断当前写入点和当前同步点的位置，如果当前写入点的位置在当前同步点之后，那么需要把同步点和写入点之间这一段未同步的数据进行同步。这里调用<code>msync</code>完成同步（注意这里调用msync的最后一个参数是MS_SYNC，因此是进行同步刷盘的），而成员函数<code>TruncateToPageBoundary</code>就在此发挥作用，用于计算内存地址的页边界，因为<code>msync</code>是以页为单位进行同步的。这里附带说两句，被mmap的内存，在被写入或者修改数据之后，要直到munmap时才会被异步刷盘，如果需要立即同步，就需要调用<code>msync</code>实现，另外在这里完成磁盘数据同步作者调用了<code>fdatasync</code>，有兴趣的同学可以去man一下fsync和fdatasync，这两个函数是有区别的，fdatasync性能更高，因为它不会去同步文件的一些元数据信息。另外提一下，操作系统的写文件操作，默认都是异步刷盘，也就是写磁盘操作由进程提交给操作系统之后，就立即返回，而不是等到操作系统真正把数据写入到磁盘之后。异步刷盘的速度比同步刷盘快上千倍，当然其缺点是如果在进程把数据提交到操作系统后，系统突然宕机，那么这些数据就不会被真正写到磁盘上，而进程却以为数据已经成功写入了。当然这种情况只有在宕机才会出现，如果进程崩溃，是不会出现数据丢失的（因为这时候进程已经把写盘请求提交给OS了）。要确保宕机数据不丢，就需要使用同步刷盘（在posix系统中，同步刷盘的方式是在写操作返回之前调用<code>fsync(...)</code> 或 <code>fdatasync(...)</code> 或 <code>msync(..., MS_SYNC)</code> ）。在leveldb的实现中，在性能和数据安全上做出了折衷，也就是每过一段时间做一次异步刷盘操作。</p>
+
+<p>至此，本篇开始提到的Env中需要实现的几个类已经全部分析完。最后还要说一下PosixEnv中实现的一个做任务的后台线程池，这里面使用<code>std::deque</code>实现一个双向队列，<code>Schedule</code>实现了把一个任务进队的操作，<code>BGThread</code>则是不停的从队列中取任务来做，这使用的是APUE中论述的经典队列模型，我这里把具体实现的代码贴出来，就不再多费口舌分析了。看不懂的同学请参考APUE第二版11.6节程序清单11-9。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">void</span> <span class="nf">PthreadCall</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">label</span><span class="p">,</span> <span class="kt">int</span> <span class="n">result</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 3</span>       <span class="n">fprintf</span><span class="p">(</span><span class="n">stderr</span><span class="p">,</span> <span class="s">&quot;pthread %s: %s</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">,</span> <span class="n">label</span><span class="p">,</span> <span class="n">strerror</span><span class="p">(</span><span class="n">result</span><span class="p">));</span>
+<span class="lineno"> 4</span>       <span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+<span class="lineno"> 5</span>     <span class="p">}</span>
+<span class="lineno"> 6</span>   <span class="p">}</span>
+<span class="lineno"> 7</span> 
+<span class="lineno"> 8</span> <span class="n">PosixEnv</span><span class="o">::</span><span class="n">PosixEnv</span><span class="p">()</span> <span class="o">:</span> <span class="n">page_size_</span><span class="p">(</span><span class="n">getpagesize</span><span class="p">()),</span>
+<span class="lineno"> 9</span>                        <span class="n">started_bgthread_</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">10</span>   <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;mutex_init&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+<span class="lineno">11</span>   <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;cvar_init&quot;</span><span class="p">,</span> <span class="n">pthread_cond_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bgsignal_</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">));</span>
+<span class="lineno">12</span> <span class="p">}</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span> <span class="kt">void</span> <span class="n">PosixEnv</span><span class="o">::</span><span class="n">Schedule</span><span class="p">(</span><span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">),</span> <span class="kt">void</span><span class="o">*</span> <span class="n">arg</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">15</span>   <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;lock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_lock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span>
+<span class="lineno">16</span> 
+<span class="lineno">17</span>   <span class="c1">// Start background thread if necessary</span>
+<span class="lineno">18</span>   <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">started_bgthread_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">19</span>     <span class="n">started_bgthread_</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+<span class="lineno">20</span>     <span class="n">PthreadCall</span><span class="p">(</span>
+<span class="lineno">21</span>         <span class="s">&quot;create thread&quot;</span><span class="p">,</span>
+<span class="lineno">22</span>         <span class="n">pthread_create</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bgthread_</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span>  <span class="o">&amp;</span><span class="n">PosixEnv</span><span class="o">::</span><span class="n">BGThreadWrapper</span><span class="p">,</span> <span class="k">this</span><span class="p">));</span>
+<span class="lineno">23</span>   <span class="p">}</span>
+<span class="lineno">24</span> 
+<span class="lineno">25</span>   <span class="c1">// If the queue is currently empty, the background thread may currently be</span>
+<span class="lineno">26</span>   <span class="c1">// waiting.</span>
+<span class="lineno">27</span>   <span class="k">if</span> <span class="p">(</span><span class="n">queue_</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">28</span>     <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;signal&quot;</span><span class="p">,</span> <span class="n">pthread_cond_signal</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bgsignal_</span><span class="p">));</span>
+<span class="lineno">29</span>   <span class="p">}</span>
+<span class="lineno">30</span> 
+<span class="lineno">31</span>   <span class="c1">// Add to priority queue</span>
+<span class="lineno">32</span>   <span class="n">queue_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">BGItem</span><span class="p">());</span>
+<span class="lineno">33</span>   <span class="n">queue_</span><span class="p">.</span><span class="n">back</span><span class="p">().</span><span class="n">function</span> <span class="o">=</span> <span class="n">function</span><span class="p">;</span>
+<span class="lineno">34</span>   <span class="n">queue_</span><span class="p">.</span><span class="n">back</span><span class="p">().</span><span class="n">arg</span> <span class="o">=</span> <span class="n">arg</span><span class="p">;</span>
+<span class="lineno">35</span> 
+<span class="lineno">36</span>   <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;unlock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span>
+<span class="lineno">37</span> <span class="p">}</span>
+<span class="lineno">38</span> 
+<span class="lineno">39</span> <span class="kt">void</span> <span class="n">PosixEnv</span><span class="o">::</span><span class="n">BGThread</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">40</span>   <span class="k">while</span> <span class="p">(</span><span class="nb">true</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">41</span>     <span class="c1">// Wait until there is an item that is ready to run</span>
+<span class="lineno">42</span>     <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;lock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_lock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span>
+<span class="lineno">43</span>     <span class="k">while</span> <span class="p">(</span><span class="n">queue_</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+<span class="lineno">44</span>       <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;wait&quot;</span><span class="p">,</span> <span class="n">pthread_cond_wait</span><span class="p">(</span><span class="o">&amp;</span><span class="n">bgsignal_</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span>
+<span class="lineno">45</span>     <span class="p">}</span>
+<span class="lineno">46</span> 
+<span class="lineno">47</span>     <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="n">queue_</span><span class="p">.</span><span class="n">front</span><span class="p">().</span><span class="n">function</span><span class="p">;</span>
+<span class="lineno">48</span>     <span class="kt">void</span><span class="o">*</span> <span class="n">arg</span> <span class="o">=</span> <span class="n">queue_</span><span class="p">.</span><span class="n">front</span><span class="p">().</span><span class="n">arg</span><span class="p">;</span>
+<span class="lineno">49</span>     <span class="n">queue_</span><span class="p">.</span><span class="n">pop_front</span><span class="p">();</span>
+<span class="lineno">50</span> 
+<span class="lineno">51</span>     <span class="n">PthreadCall</span><span class="p">(</span><span class="s">&quot;unlock&quot;</span><span class="p">,</span> <span class="n">pthread_mutex_unlock</span><span class="p">(</span><span class="o">&amp;</span><span class="n">mu_</span><span class="p">));</span>
+<span class="lineno">52</span>     <span class="p">(</span><span class="o">*</span><span class="n">function</span><span class="p">)(</span><span class="n">arg</span><span class="p">);</span>
+<span class="lineno">53</span>   <span class="p">}</span>
+<span class="lineno">54</span> <span class="p">}</span></code></pre></div>
+
+<p>至此，util中与env相关的部分就分析完了，这一篇的内容很长，我自己在写这一篇的过程中，查阅了很多资料，也学习了不少系统知识，受益匪浅，同时也难免会有差错，如果有什么地方写得不对或者不够清楚，请读者们不吝赐教。下一篇，我们将分析leveldb实现的cache，同时也将是util部分的最后一篇。</p>
+
 
   </article>
 

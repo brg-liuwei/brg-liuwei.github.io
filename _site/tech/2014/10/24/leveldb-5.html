@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>和我一起学习leveldb [5 util (续)]</title>
+    <title>和我一起学习leveldb [5 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
@@ -57,12 +57,14 @@
         <div class="post">
 
   <header class="post-header">
-    <h1 class="post-title">和我一起学习leveldb [5 util (续)]</h1>
+    <h1 class="post-title">和我一起学习leveldb [5 util(续)]</h1>
     <p class="post-meta">Oct 24, 2014</p>
   </header>
 
   <article class="post-content">
-    <p>这一节我们分析<strong>logging</strong>和<strong>comparator</strong>.</p>
+    <h1 id="section">[日志与比较器]</h1>
+
+<p>这一节我们分析<strong>logging</strong>和<strong>comparator</strong>.</p>
 
 <p>util中的logging是用于为leveldb操作commitlog提供一些基础方法。commitlog是用于保证消息在刷盘前宕机的情形下，对未持久化的消息进行恢复的模块。而<strong>include/leveldb/env.h</strong>和<strong>util/posix_logger.h</strong>中定义和实现的<strong>Logger</strong>则是打印可读信息的日志类. <strong>util/logging.h</strong>中为logging声明了几种方法：</p>
 

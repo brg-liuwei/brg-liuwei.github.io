@@ -6,12 +6,12 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>Blog of Finesse</title>
+    <title>和我一起学习leveldb [7 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
     <link rel="stylesheet" href="/css/main.css">
-    <link rel="canonical" href="http://someaddr.com/">
+    <link rel="canonical" href="http://someaddr.com/tech/2014/11/07/leveldb-7.html">
 </head>
 
 
@@ -54,114 +54,53 @@
 
     <div class="page-content">
       <div class="wrapper">
-        <div class="home">
+        <div class="post">
 
-  <h1 class="page-heading">Declarer will ofter score another, if his honor you don't cover</h1>
+  <header class="post-header">
+    <h1 class="post-title">和我一起学习leveldb [7 util(续)]</h1>
+    <p class="post-meta">Nov 7, 2014</p>
+  </header>
 
-  <ul class="post-list">
-    
-      <li>
-        <span class="post-meta">Nov 7, 2014</span>
+  <article class="post-content">
+    <h1 id="section">[缓存]</h1>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/11/07/leveldb-7.html">和我一起学习leveldb [7 util(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Nov 7, 2014</span>
+<p>这一篇将分析leveldb的cache，请容我慢慢道来。提醒大家一下，上一篇以前你们看到的内容是还没有写完的，今天花了点时间把上一篇抽象环境分析完了，内容很多很杂，同学们再去看两眼哦，同时别忘了给我的github的这个博客项目加颗星星。</p>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/11/07/leveldb-6.html">和我一起学习leveldb [6 util(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Nov 3, 2014</span>
+<p>由于鄙人最近工作比较忙，时间有点紧，所以请大家耐心等待，本篇内容我尽量保证在12月中旬写完，谢谢大家！</p>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/11/03/jni.html">[技术小贴士]: 用C/C++调用java</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Nov 2, 2014</span>
+  </article>
 
-        <h2>
-          <a class="post-link" href="/tech/2014/11/02/lua-cosocket.html">[技术小贴士]: lua cosocket</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 24, 2014</span>
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
 
-        <h2>
-          <a class="post-link" href="/tech/2014/10/24/leveldb-5.html">和我一起学习leveldb [5 util(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 20, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/20/leveldb-4.html">和我一起学习leveldb [4 util(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 16, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/16/leveldb-3.html">和我一起学习leveldb [3 util(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-2.html">和我一起学习leveldb [2 port(续)]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-1.html">和我一起学习leveldb [1 port]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 15, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/15/leveldb-0.html">和我一起学习leveldb [0 源码结构]</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Oct 14, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/10/14/twemproxy-macro.html">提升C程序员的逼格：从twemproxy源码学习宏定义技巧</a>
-        </h2>
-      </li>
-    
-      <li>
-        <span class="post-meta">Sep 29, 2014</span>
-
-        <h2>
-          <a class="post-link" href="/tech/2014/09/29/snprintf.html">误用snprintf导致的bug</a>
-        </h2>
-      </li>
-    
-  </ul>
-
-  <p class="rss-subscribe">RSS订阅，请猛戳<a href="/feed.xml">这里</a></p>
-
-  <p>友情链接:</p>
-  <p> <a href = "http://www.cnblogs.com/luosha">罗刹剑客(机器学习)</a> </p>
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+    </script>
+<!-- 多说公共JS代码 end -->
 
 </div>
 

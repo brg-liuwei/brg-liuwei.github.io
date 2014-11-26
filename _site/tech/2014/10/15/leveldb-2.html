@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>和我一起学习leveldb [2 port (续)]</title>
+    <title>和我一起学习leveldb [2 port(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
@@ -57,12 +57,14 @@
         <div class="post">
 
   <header class="post-header">
-    <h1 class="post-title">和我一起学习leveldb [2 port (续)]</h1>
+    <h1 class="post-title">和我一起学习leveldb [2 port(续)]</h1>
     <p class="post-meta">Oct 15, 2014</p>
   </header>
 
   <article class="post-content">
-    <p>上一篇我们讨论了<strong>atomic_pointer</strong>，这篇我们讨论剩下的 <strong>port_xxx.x</strong> 文件。leveldb在<strong>port_posix.h</strong>中实现了<strong>Snappy_Compress</strong>, <strong>Snappy_GetUncompressedLength</strong>, <strong>Snappy_Uncompress</strong>三个函数。我们知道，<strong>Snappy</strong>是Google自己开发的压缩包，这里是为在支持Snappy的环境下使用Snappy压缩。关于Snappy这款压缩神器，有兴趣的同学请看<a href="https://github.com/google/snappy">这里</a>。另外这个文件中还实现了<strong>GetHeapProfile</strong>函数，这个应该是跟google的性能测试工具<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>相关的接口。附带说一句，<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>是Google的一款重量级神器，里面有很多性能分析工具，还有目前最快的通用内存分配工具<strong>tcmalloc</strong>，如果能够把这个包使用熟练了，你将会有飞一般的感觉！关于中文版使用指南，请看<a href="http://www.searchtb.com/2012/12/google-cpu-profiler.html">这里</a></p>
+    <h1 id="section">[互斥]</h1>
+
+<p>上一篇我们讨论了<strong>atomic_pointer</strong>，这篇我们讨论剩下的 <strong>port_xxx.x</strong> 文件。leveldb在<strong>port_posix.h</strong>中实现了<strong>Snappy_Compress</strong>, <strong>Snappy_GetUncompressedLength</strong>, <strong>Snappy_Uncompress</strong>三个函数。我们知道，<strong>Snappy</strong>是Google自己开发的压缩包，这里是为在支持Snappy的环境下使用Snappy压缩。关于Snappy这款压缩神器，有兴趣的同学请看<a href="https://github.com/google/snappy">这里</a>。另外这个文件中还实现了<strong>GetHeapProfile</strong>函数，这个应该是跟google的性能测试工具<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>相关的接口。附带说一句，<a href="https://code.google.com/p/gperftools/"><strong>gperftools</strong></a>是Google的一款重量级神器，里面有很多性能分析工具，还有目前最快的通用内存分配工具<strong>tcmalloc</strong>，如果能够把这个包使用熟练了，你将会有飞一般的感觉！关于中文版使用指南，请看<a href="http://www.searchtb.com/2012/12/google-cpu-profiler.html">这里</a></p>
 
 <p>好了，言归正传，<strong>port_posix.h</strong>里面声明了<strong>Mutex</strong>和<strong>CondVar</strong>类，去<strong>port_posix.cc</strong>看实现，其实是把<strong>pthread</strong>调用封装了C++，这段代码在技术上是很容易看懂的，重要的是，从这里去学习C++编程思想，记得<a href="http://coolshell.cn/">酷壳网</a>的陈皓老师说过，绝大部分写C++的程序员，其实都是在用C++的语法来写C。就我个人而言，感觉C++太难（如果你不相信C++巨难，请看<a href="http://coolshell.cn/articles/2250.html">这里</a>），也许能通过这次学习leveldb，长一点见识吧。</p>
 

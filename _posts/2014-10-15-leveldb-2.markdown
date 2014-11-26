@@ -1,9 +1,11 @@
 ---
 layout: post
-title: "和我一起学习leveldb [2 port (续)]"
+title: "和我一起学习leveldb [2 port(续)]"
 date: 2014-10-15
 categories: tech
 ---
+
+#[互斥]
 
 上一篇我们讨论了**atomic_pointer**，这篇我们讨论剩下的 **port_xxx.x** 文件。leveldb在**port_posix.h**中实现了**Snappy_Compress**, **Snappy_GetUncompressedLength**, **Snappy_Uncompress**三个函数。我们知道，**Snappy**是Google自己开发的压缩包，这里是为在支持Snappy的环境下使用Snappy压缩。关于Snappy这款压缩神器，有兴趣的同学请看[这里][snappy_github]。另外这个文件中还实现了**GetHeapProfile**函数，这个应该是跟google的性能测试工具[**gperftools**][gperftools_google]相关的接口。附带说一句，[**gperftools**][gperftools_google]是Google的一款重量级神器，里面有很多性能分析工具，还有目前最快的通用内存分配工具**tcmalloc**，如果能够把这个包使用熟练了，你将会有飞一般的感觉！关于中文版使用指南，请看[这里][gperftools_taobao]
 

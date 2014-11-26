@@ -1,9 +1,11 @@
 ---
 layout: post
-title: "和我一起学习leveldb [3 util]"
+title: "和我一起学习leveldb [3 util(续)]"
 date: 2014-10-16
 categories: tech
 ---
+
+#[概览]
 
 leveldb源码的util中，实现了许多leveldb需要使用的工具，我们先来看一下代码结构(不包含测试代码)：
 

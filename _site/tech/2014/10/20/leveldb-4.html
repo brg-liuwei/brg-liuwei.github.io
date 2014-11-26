@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
-    <title>和我一起学习leveldb [4 util (续)]</title>
+    <title>和我一起学习leveldb [4 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
 ">
 
@@ -57,12 +57,14 @@
         <div class="post">
 
   <header class="post-header">
-    <h1 class="post-title">和我一起学习leveldb [4 util (续)]</h1>
+    <h1 class="post-title">和我一起学习leveldb [4 util(续)]</h1>
     <p class="post-meta">Oct 20, 2014</p>
   </header>
 
   <article class="post-content">
-    <p>这一篇我们先来讨论<strong>coding.h/coding.cc</strong>，leveldb作者在这两个文件中实现了整数编码，总体来说是非常简洁直观的。其中Fixed32/Fixed64是定长的32/64位整数编码。实现非常简单：</p>
+    <h1 id="section">[编码与过滤器]</h1>
+
+<p>这一篇我们先来讨论<strong>coding.h/coding.cc</strong>，leveldb作者在这两个文件中实现了整数编码，总体来说是非常简洁直观的。其中Fixed32/Fixed64是定长的32/64位整数编码。实现非常简单：</p>
 
 <div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">void</span> <span class="nf">EncodeFixed32</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span> <span class="n">buf</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
 <span class="lineno"> 2</span> <span class="cp">#if __BYTE_ORDER == __LITTLE_ENDIAN</span>
