@@ -64,9 +64,147 @@
   <article class="post-content">
     <h1 id="section">[缓存]</h1>
 
-<p>这一篇将分析leveldb的cache，请容我慢慢道来。提醒大家一下，上一篇以前你们看到的内容是还没有写完的，今天花了点时间把上一篇抽象环境分析完了，内容很多很杂，同学们再去看两眼哦，同时别忘了给我的github的这个博客项目加颗星星。</p>
+<p>这一篇将分析leveldb的cache，请容我慢慢道来。提醒大家一下，上一篇以前你们看到的内容是还没有写完的，今天花了点时间把上一篇抽象环境分析完了，内容很多很杂很丰富，同学们再去看两眼哦，同时别忘了给我的github的这个博客项目加颗星星。</p>
 
 <p>由于鄙人最近工作比较忙，时间有点紧，所以请大家耐心等待，本篇内容我尽量保证在12月中旬写完，谢谢大家！</p>
+
+<p><strong>arena</strong>是轻量级的内存池，设计很简单，其数据结构如下图所示：</p>
+
+<pre><code>           arena
++------------------------+
+|       alloc_ptr_       | ---------------------------+
++------------------------+                            |
+| alloc_bytes_remaining_ |                            |
++------------------------+                            .
+| vector&lt;char*&gt; blocks_  | ---&gt; +----------+------+----------+--------------+
++------------------------+      |  block1  |block2|  block3  |    block4    |
+|     blocks_memory_     |      +----------+------+----------+--------------+
++------------------------+         1 page    x B     1 page        y B
+
+对于一次大于1/4 page的内存分配请求，如果目前块剩下的部分不够，
+就直接分配一个一块所需大小的内存（避免浪费当前块），单独作为一个block(例如x,y)
+</code></pre>
+
+<p><strong>arena</strong>的逻辑很简单，用一个<code>vector&lt;char *&gt;</code>来维护所有分配的内存。alloc_ptr_指向当前内存池中可以分配内存的起始点。当一个内存分配请求x字节的内存时，先看alloc_ptr_到该块末尾还有多少内存(这个记录在alloc_bytes_remaining_中)，如果该块内存够，新申请的内存首地址就是现在的alloc_ptr<em>，然后把alloc_ptr_朝后面移动x字节，并重新计算alloc_bytes_remaining</em>。如果该块剩下的内存不够了，就看x是否大于1/4 page，如果不大于1/4page，说明当前块剩下的不足1/4了，那么就直接分配一个新的block(1 page)，把alloc_ptr_的置为新block的首地址，再按之前的逻辑进行分配，旧的块剩余的内存就被浪费掉了。新申请的block被pushback到blocks_中，以后在arena被析构的时候统一释放。如果内存分配请求大于1/4个pagesize，为了避免浪费当前块剩下的内存，就直接向操作系统申请x字节的内存，作为一个单独的block返回，这个block同样也会被pushback到vector之中。把机理分析完毕之后，再贴代码就很好读懂了：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">class</span> <span class="nc">Arena</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 3</span>         <span class="n">Arena</span><span class="p">();</span>
+<span class="lineno"> 4</span>         <span class="o">~</span><span class="n">Arena</span><span class="p">();</span>
+<span class="lineno"> 5</span> 
+<span class="lineno"> 6</span>         <span class="c1">// Return a pointer to a newly allocated memory block of &quot;bytes&quot; bytes.</span>
+<span class="lineno"> 7</span>         <span class="kt">char</span><span class="o">*</span> <span class="nf">Allocate</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">);</span>
+<span class="lineno"> 8</span> 
+<span class="lineno"> 9</span>         <span class="c1">// Allocate memory with the normal alignment guarantees provided by malloc</span>
+<span class="lineno">10</span>         <span class="kt">char</span><span class="o">*</span> <span class="nf">AllocateAligned</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">);</span>
+<span class="lineno">11</span> 
+<span class="lineno">12</span>         <span class="c1">// Returns an estimate of the total memory usage of data allocated</span>
+<span class="lineno">13</span>         <span class="c1">// by the arena (including space allocated but not yet used for user</span>
+<span class="lineno">14</span>         <span class="c1">// allocations).</span>
+<span class="lineno">15</span>         <span class="kt">size_t</span> <span class="nf">MemoryUsage</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno">16</span>             <span class="k">return</span> <span class="n">blocks_memory_</span> <span class="o">+</span> <span class="n">blocks_</span><span class="p">.</span><span class="n">capacity</span><span class="p">()</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">char</span><span class="o">*</span><span class="p">);</span>
+<span class="lineno">17</span>         <span class="p">}</span>
+<span class="lineno">18</span> 
+<span class="lineno">19</span>     <span class="k">private</span><span class="o">:</span>
+<span class="lineno">20</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">AllocateFallback</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">);</span>
+<span class="lineno">21</span>         <span class="kt">char</span><span class="o">*</span> <span class="nf">AllocateNewBlock</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">block_bytes</span><span class="p">);</span>
+<span class="lineno">22</span> 
+<span class="lineno">23</span>         <span class="c1">// Allocation state</span>
+<span class="lineno">24</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">alloc_ptr_</span><span class="p">;</span>
+<span class="lineno">25</span>         <span class="kt">size_t</span> <span class="n">alloc_bytes_remaining_</span><span class="p">;</span>
+<span class="lineno">26</span> 
+<span class="lineno">27</span>         <span class="c1">// Array of new[] allocated memory blocks</span>
+<span class="lineno">28</span>         <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">char</span><span class="o">*&gt;</span> <span class="n">blocks_</span><span class="p">;</span>
+<span class="lineno">29</span> 
+<span class="lineno">30</span>         <span class="c1">// Bytes of memory in blocks allocated so far</span>
+<span class="lineno">31</span>         <span class="kt">size_t</span> <span class="n">blocks_memory_</span><span class="p">;</span>
+<span class="lineno">32</span> 
+<span class="lineno">33</span>         <span class="c1">// No copying allowed</span>
+<span class="lineno">34</span>         <span class="n">Arena</span><span class="p">(</span><span class="k">const</span> <span class="n">Arena</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">35</span>         <span class="kt">void</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">Arena</span><span class="o">&amp;</span><span class="p">);</span>
+<span class="lineno">36</span> <span class="p">};</span>
+<span class="lineno">37</span> 
+<span class="lineno">38</span> <span class="kr">inline</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Arena</span><span class="o">::</span><span class="n">Allocate</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">39</span>     <span class="c1">// The semantics of what to return are a bit messy if we allow</span>
+<span class="lineno">40</span>     <span class="c1">// 0-byte allocations, so we disallow them here (we don&#39;t need</span>
+<span class="lineno">41</span>     <span class="c1">// them for our internal use).</span>
+<span class="lineno">42</span>     <span class="n">assert</span><span class="p">(</span><span class="n">bytes</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">43</span>     <span class="k">if</span> <span class="p">(</span><span class="n">bytes</span> <span class="o">&lt;=</span> <span class="n">alloc_bytes_remaining_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">44</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">alloc_ptr_</span><span class="p">;</span>
+<span class="lineno">45</span>         <span class="n">alloc_ptr_</span> <span class="o">+=</span> <span class="n">bytes</span><span class="p">;</span>
+<span class="lineno">46</span>         <span class="n">alloc_bytes_remaining_</span> <span class="o">-=</span> <span class="n">bytes</span><span class="p">;</span>
+<span class="lineno">47</span>         <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">48</span>     <span class="p">}</span>
+<span class="lineno">49</span>     <span class="k">return</span> <span class="n">AllocateFallback</span><span class="p">(</span><span class="n">bytes</span><span class="p">);</span>
+<span class="lineno">50</span> <span class="p">}</span></code></pre></div>
+
+<p>在`Arena::Allocate函数的实现中，我们看到，如果当前块放不下了，就调用AllocateFallback。AllocateFallback会根据当前申请的内存大小，去单独向操作系统申请一个块给这次请求，或者另分配一个内存块，把当前的块剩下的内存浪费掉：</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">kBlockSize</span> <span class="o">=</span> <span class="mi">4096</span><span class="p">;</span>
+<span class="lineno"> 2</span> 
+<span class="lineno"> 3</span> <span class="n">Arena</span><span class="o">::</span><span class="n">Arena</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno"> 4</span>     <span class="n">blocks_memory_</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 5</span>     <span class="n">alloc_ptr_</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>  <span class="c1">// First allocation will allocate a block</span>
+<span class="lineno"> 6</span>     <span class="n">alloc_bytes_remaining_</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 7</span> <span class="p">}</span>
+<span class="lineno"> 8</span> 
+<span class="lineno"> 9</span> <span class="n">Arena</span><span class="o">::~</span><span class="n">Arena</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">10</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">size_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">blocks_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">11</span>         <span class="k">delete</span><span class="p">[]</span> <span class="n">blocks_</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="lineno">12</span>     <span class="p">}</span>
+<span class="lineno">13</span> <span class="p">}</span>
+<span class="lineno">14</span> 
+<span class="lineno">15</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Arena</span><span class="o">::</span><span class="n">AllocateFallback</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">16</span>     <span class="k">if</span> <span class="p">(</span><span class="n">bytes</span> <span class="o">&gt;</span> <span class="n">kBlockSize</span> <span class="o">/</span> <span class="mi">4</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">17</span>         <span class="c1">// Object is more than a quarter of our block size.  Allocate it separately</span>
+<span class="lineno">18</span>         <span class="c1">// to avoid wasting too much space in leftover bytes.</span>
+<span class="lineno">19</span>         <span class="kt">char</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">AllocateNewBlock</span><span class="p">(</span><span class="n">bytes</span><span class="p">);</span>
+<span class="lineno">20</span>         <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">21</span>     <span class="p">}</span>
+<span class="lineno">22</span> 
+<span class="lineno">23</span>     <span class="c1">// We waste the remaining space in the current block.</span>
+<span class="lineno">24</span>     <span class="n">alloc_ptr_</span> <span class="o">=</span> <span class="n">AllocateNewBlock</span><span class="p">(</span><span class="n">kBlockSize</span><span class="p">);</span>
+<span class="lineno">25</span>     <span class="n">alloc_bytes_remaining_</span> <span class="o">=</span> <span class="n">kBlockSize</span><span class="p">;</span>
+<span class="lineno">26</span> 
+<span class="lineno">27</span>     <span class="kt">char</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="n">alloc_ptr_</span><span class="p">;</span>
+<span class="lineno">28</span>     <span class="n">alloc_ptr_</span> <span class="o">+=</span> <span class="n">bytes</span><span class="p">;</span>
+<span class="lineno">29</span>     <span class="n">alloc_bytes_remaining_</span> <span class="o">-=</span> <span class="n">bytes</span><span class="p">;</span>
+<span class="lineno">30</span>     <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">31</span> <span class="p">}</span>
+<span class="lineno">32</span> 
+<span class="lineno">33</span> <span class="c1">// 分配一个大小为block_bytes的内存块，并挂在vector后面</span>
+<span class="lineno">34</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Arena</span><span class="o">::</span><span class="n">AllocateNewBlock</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">block_bytes</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">35</span>   <span class="kt">char</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="k">new</span> <span class="kt">char</span><span class="p">[</span><span class="n">block_bytes</span><span class="p">];</span>
+<span class="lineno">36</span>   <span class="n">blocks_memory_</span> <span class="o">+=</span> <span class="n">block_bytes</span><span class="p">;</span>
+<span class="lineno">37</span>   <span class="n">blocks_</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+<span class="lineno">38</span>   <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">39</span> <span class="p">}</span></code></pre></div>
+
+<p>关于Arena，最后再提一下Arena里面提供的内存对齐分配接口。读了<code>Arena::Allocate</code>的代码，我们知道Arena的Allocate返回的内存地址是不保证任何对齐的。然而如果我们使用malloc簇函数，返回的内存默认是sizeof(void *)对齐的（关于这一点，很多同学是不清楚的，我觉得如果要写好C/C++程序，必须对malloc的机制有一定的了解，例如malloc是如何对齐的，malloc分配的内存块被溢出会出现什么情况，如果要分配一段内存并且自定义字节对齐怎么办等等）。因此在Arena中也提供了返回地址内存对齐的分配函数<code>Arena::AllocateAligned</code>。其实实现内存对齐相当简单，只需计算当前的alloc_ptr_的地址，多分配几个字节，返回内存对齐的地址就可以了。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kt">char</span><span class="o">*</span> <span class="n">Arena</span><span class="o">::</span><span class="n">AllocateAligned</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">bytes</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 2</span>     <span class="k">const</span> <span class="kt">int</span> <span class="n">align</span> <span class="o">=</span> <span class="k">sizeof</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span><span class="p">);</span>    <span class="c1">// We&#39;ll align to pointer size</span>
+<span class="lineno"> 3</span>     <span class="n">assert</span><span class="p">((</span><span class="n">align</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">align</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>   <span class="c1">// Pointer size should be a power of 2</span>
+<span class="lineno"> 4</span>     <span class="kt">size_t</span> <span class="n">current_mod</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">uintptr_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">alloc_ptr_</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">align</span><span class="o">-</span><span class="mi">1</span><span class="p">);</span>
+<span class="lineno"> 5</span>     <span class="kt">size_t</span> <span class="n">slop</span> <span class="o">=</span> <span class="p">(</span><span class="n">current_mod</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="mi">0</span> <span class="o">:</span> <span class="n">align</span> <span class="o">-</span> <span class="n">current_mod</span><span class="p">);</span>
+<span class="lineno"> 6</span>     <span class="kt">size_t</span> <span class="n">needed</span> <span class="o">=</span> <span class="n">bytes</span> <span class="o">+</span> <span class="n">slop</span><span class="p">;</span>
+<span class="lineno"> 7</span>     <span class="kt">char</span><span class="o">*</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno"> 8</span>     <span class="k">if</span> <span class="p">(</span><span class="n">needed</span> <span class="o">&lt;=</span> <span class="n">alloc_bytes_remaining_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 9</span>         <span class="n">result</span> <span class="o">=</span> <span class="n">alloc_ptr_</span> <span class="o">+</span> <span class="n">slop</span><span class="p">;</span>
+<span class="lineno">10</span>         <span class="n">alloc_ptr_</span> <span class="o">+=</span> <span class="n">needed</span><span class="p">;</span>
+<span class="lineno">11</span>         <span class="n">alloc_bytes_remaining_</span> <span class="o">-=</span> <span class="n">needed</span><span class="p">;</span>
+<span class="lineno">12</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno">13</span>         <span class="c1">// AllocateFallback always returned aligned memory</span>
+<span class="lineno">14</span>         <span class="n">result</span> <span class="o">=</span> <span class="n">AllocateFallback</span><span class="p">(</span><span class="n">bytes</span><span class="p">);</span>
+<span class="lineno">15</span>     <span class="p">}</span>
+<span class="lineno">16</span>     <span class="n">assert</span><span class="p">((</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">uintptr_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">result</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">align</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span> <span class="o">==</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">17</span>     <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno">18</span> <span class="p">}</span></code></pre></div>
+
+<p>值得一提的是第13行的注释说，<code>AllocateFallback</code>函数返回的内存总是内存对齐的。这是因为<code>AllocateFallback</code>中分配内存调用了<code>AllocateNewBlock</code>，而<code>AllocateNewBlock</code>里面是直接调用<code>new</code>算子进行内存分配的。标准库的<code>new</code>实现是对于小于128字节的内存分配，自己维护了一个内存池，内存池中是按8、16、…、128字节维护<code>free list</code>的，而对于超过128字节的内存分配请求，直接调用calloc进行内存分配，因此<code>new</code>算子返回的地址一定是8字节对齐的。关于这部分，有兴趣的同学请参考由<a href="http://www.hust.edu.cn"><strong>华中科技大学</strong></a>出版社出版的《STL源码剖析》的第二章（请原谅我在这里为母校加了一个链接 :) ）。</p>
+
+<p>至此，Arena的实现就全部分析完毕了，接下来我们来看看如何利用Arena实现一个Cache。</p>
+
 
   </article>
 
