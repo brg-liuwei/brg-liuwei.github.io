@@ -12,6 +12,7 @@
 
     <link rel="stylesheet" href="/css/main.css">
     <link rel="canonical" href="http://someaddr.com/tech/2014/10/14/twemproxy-macro.html">
+
 </head>
 
 
@@ -201,9 +202,29 @@ var duoshuoQuery = {short_name:"brgliuwei"};
         (document.getElementsByTagName('head')[0] 
          || document.getElementsByTagName('body')[0]).appendChild(ds);
     })();
+
     </script>
 <!-- 多说公共JS代码 end -->
 
+  <script type="text/javascript">
+    var links = document.links;
+     
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    }
+    function addBlankTargetForLinks() {
+        $('a[href^="http"]').each(function() {
+            $(this).attr('target', '_blank');
+        })
+    }
+    
+    $(document).bind('DOMNodeInserted', function(event) {
+        addBlankTargetForLinks();
+    });
+</script>
+ <!-- 为href跳转添加"_blank"标签，实现打开新标签页跳转 -->
 </div>
 
       </div>
