@@ -206,6 +206,119 @@
 
 <p>至此，Arena的实现就全部分析完毕了，接下来我们来看看如何利用Arena实现一个Cache。</p>
 
+<p>在理解leveldb的cache实现中，要理解三个数据结构，一是<strong>HandleTable</strong>，这是一个经典的HashTable的实现，HashTable里面的每个元素除了有一个hash链的指针next_hash外，另外再附带prev和next指针，将所有的Handle链接起来成一个双向链表，用于实现第二个数据结构<strong>LRUCache</strong>。第三个是<strong>ShardedLRUCache</strong>，它是用来管理多个<strong>LRUCache</strong>的。我们先来看一下HashTable:</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno">  1</span> <span class="c1">// An entry is a variable length heap-allocated structure.  Entries</span>
+<span class="lineno">  2</span> <span class="c1">// are kept in a circular doubly linked list ordered by access time.</span>
+<span class="lineno">  3</span> <span class="k">struct</span> <span class="n">LRUHandle</span> <span class="p">{</span>
+<span class="lineno">  4</span>   <span class="kt">void</span><span class="o">*</span> <span class="n">value</span><span class="p">;</span>
+<span class="lineno">  5</span>   <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">deleter</span><span class="p">)(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">value</span><span class="p">);</span>
+<span class="lineno">  6</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">next_hash</span><span class="p">;</span>
+<span class="lineno">  7</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">next</span><span class="p">;</span>
+<span class="lineno">  8</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">prev</span><span class="p">;</span>
+<span class="lineno">  9</span>   <span class="kt">size_t</span> <span class="n">charge</span><span class="p">;</span>      <span class="c1">// TODO(opt): Only allow uint32_t?</span>
+<span class="lineno"> 10</span>   <span class="kt">size_t</span> <span class="n">key_length</span><span class="p">;</span>
+<span class="lineno"> 11</span>   <span class="kt">uint32_t</span> <span class="n">refs</span><span class="p">;</span>
+<span class="lineno"> 12</span>   <span class="kt">uint32_t</span> <span class="n">hash</span><span class="p">;</span>      <span class="c1">// Hash of key(); used for fast sharding and comparisons</span>
+<span class="lineno"> 13</span>   <span class="kt">char</span> <span class="n">key_data</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>   <span class="c1">// Beginning of key</span>
+<span class="lineno"> 14</span> 
+<span class="lineno"> 15</span>   <span class="n">Slice</span> <span class="nf">key</span><span class="p">()</span> <span class="k">const</span> <span class="p">{</span>
+<span class="lineno"> 16</span>     <span class="c1">// For cheaper lookups, we allow a temporary Handle object</span>
+<span class="lineno"> 17</span>     <span class="c1">// to store a pointer to a key in &quot;value&quot;.</span>
+<span class="lineno"> 18</span>     <span class="k">if</span> <span class="p">(</span><span class="n">next</span> <span class="o">==</span> <span class="k">this</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 19</span>       <span class="k">return</span> <span class="o">*</span><span class="p">(</span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">Slice</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">value</span><span class="p">));</span>
+<span class="lineno"> 20</span>     <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+<span class="lineno"> 21</span>       <span class="k">return</span> <span class="n">Slice</span><span class="p">(</span><span class="n">key_data</span><span class="p">,</span> <span class="n">key_length</span><span class="p">);</span>
+<span class="lineno"> 22</span>     <span class="p">}</span>
+<span class="lineno"> 23</span>   <span class="p">}</span>
+<span class="lineno"> 24</span> <span class="p">};</span>
+<span class="lineno"> 25</span> 
+<span class="lineno"> 26</span> <span class="k">class</span> <span class="nc">HandleTable</span> <span class="p">{</span>
+<span class="lineno"> 27</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno"> 28</span>   <span class="n">HandleTable</span><span class="p">()</span> <span class="o">:</span> <span class="n">length_</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">elems_</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">list_</span><span class="p">(</span><span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span> <span class="n">Resize</span><span class="p">();</span> <span class="p">}</span>
+<span class="lineno"> 29</span>   <span class="o">~</span><span class="n">HandleTable</span><span class="p">()</span> <span class="p">{</span> <span class="k">delete</span><span class="p">[]</span> <span class="n">list_</span><span class="p">;</span> <span class="p">}</span>
+<span class="lineno"> 30</span> 
+<span class="lineno"> 31</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">Lookup</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">hash</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 32</span>     <span class="k">return</span> <span class="o">*</span><span class="n">FindPointer</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">hash</span><span class="p">);</span>
+<span class="lineno"> 33</span>   <span class="p">}</span>
+<span class="lineno"> 34</span> 
+<span class="lineno"> 35</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">Insert</span><span class="p">(</span><span class="n">LRUHandle</span><span class="o">*</span> <span class="n">h</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 36</span>     <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">ptr</span> <span class="o">=</span> <span class="n">FindPointer</span><span class="p">(</span><span class="n">h</span><span class="o">-&gt;</span><span class="n">key</span><span class="p">(),</span> <span class="n">h</span><span class="o">-&gt;</span><span class="n">hash</span><span class="p">);</span>
+<span class="lineno"> 37</span>     <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">old</span> <span class="o">=</span> <span class="o">*</span><span class="n">ptr</span><span class="p">;</span>
+<span class="lineno"> 38</span>     <span class="n">h</span><span class="o">-&gt;</span><span class="n">next_hash</span> <span class="o">=</span> <span class="p">(</span><span class="n">old</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="o">?</span> <span class="nb">NULL</span> <span class="o">:</span> <span class="n">old</span><span class="o">-&gt;</span><span class="n">next_hash</span><span class="p">);</span>
+<span class="lineno"> 39</span>     <span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">h</span><span class="p">;</span>
+<span class="lineno"> 40</span>     <span class="k">if</span> <span class="p">(</span><span class="n">old</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 41</span>       <span class="o">++</span><span class="n">elems_</span><span class="p">;</span>
+<span class="lineno"> 42</span>       <span class="k">if</span> <span class="p">(</span><span class="n">elems_</span> <span class="o">&gt;</span> <span class="n">length_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 43</span>         <span class="c1">// Since each cache entry is fairly large, we aim for a small</span>
+<span class="lineno"> 44</span>         <span class="c1">// average linked list length (&lt;= 1).</span>
+<span class="lineno"> 45</span>         <span class="n">Resize</span><span class="p">();</span>
+<span class="lineno"> 46</span>       <span class="p">}</span>
+<span class="lineno"> 47</span>     <span class="p">}</span>
+<span class="lineno"> 48</span>     <span class="k">return</span> <span class="n">old</span><span class="p">;</span>
+<span class="lineno"> 49</span>   <span class="p">}</span>
+<span class="lineno"> 50</span> 
+<span class="lineno"> 51</span>   <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">Remove</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">hash</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 52</span>     <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">ptr</span> <span class="o">=</span> <span class="n">FindPointer</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">hash</span><span class="p">);</span>
+<span class="lineno"> 53</span>     <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">result</span> <span class="o">=</span> <span class="o">*</span><span class="n">ptr</span><span class="p">;</span>
+<span class="lineno"> 54</span>     <span class="k">if</span> <span class="p">(</span><span class="n">result</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 55</span>       <span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">result</span><span class="o">-&gt;</span><span class="n">next_hash</span><span class="p">;</span>
+<span class="lineno"> 56</span>       <span class="o">--</span><span class="n">elems_</span><span class="p">;</span>
+<span class="lineno"> 57</span>     <span class="p">}</span>
+<span class="lineno"> 58</span>     <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+<span class="lineno"> 59</span>   <span class="p">}</span>
+<span class="lineno"> 60</span> 
+<span class="lineno"> 61</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno"> 62</span>   <span class="c1">// The table consists of an array of buckets where each bucket is</span>
+<span class="lineno"> 63</span>   <span class="c1">// a linked list of cache entries that hash into the bucket.</span>
+<span class="lineno"> 64</span>   <span class="kt">uint32_t</span> <span class="n">length_</span><span class="p">;</span>
+<span class="lineno"> 65</span>   <span class="kt">uint32_t</span> <span class="n">elems_</span><span class="p">;</span>
+<span class="lineno"> 66</span>   <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">list_</span><span class="p">;</span>
+<span class="lineno"> 67</span> 
+<span class="lineno"> 68</span>   <span class="c1">// Return a pointer to slot that points to a cache entry that</span>
+<span class="lineno"> 69</span>   <span class="c1">// matches key/hash.  If there is no such cache entry, return a</span>
+<span class="lineno"> 70</span>   <span class="c1">// pointer to the trailing slot in the corresponding linked list.</span>
+<span class="lineno"> 71</span>   <span class="n">LRUHandle</span><span class="o">**</span> <span class="nf">FindPointer</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="kt">uint32_t</span> <span class="n">hash</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 72</span>     <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">ptr</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">list_</span><span class="p">[</span><span class="n">hash</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">length_</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)];</span>
+<span class="lineno"> 73</span>     <span class="k">while</span> <span class="p">(</span><span class="o">*</span><span class="n">ptr</span> <span class="o">!=</span> <span class="nb">NULL</span> <span class="o">&amp;&amp;</span>
+<span class="lineno"> 74</span>            <span class="p">((</span><span class="o">*</span><span class="n">ptr</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">hash</span> <span class="o">!=</span> <span class="n">hash</span> <span class="o">||</span> <span class="n">key</span> <span class="o">!=</span> <span class="p">(</span><span class="o">*</span><span class="n">ptr</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">key</span><span class="p">()))</span> <span class="p">{</span>
+<span class="lineno"> 75</span>       <span class="n">ptr</span> <span class="o">=</span> <span class="o">&amp;</span><span class="p">(</span><span class="o">*</span><span class="n">ptr</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">next_hash</span><span class="p">;</span>
+<span class="lineno"> 76</span>     <span class="p">}</span>
+<span class="lineno"> 77</span>     <span class="k">return</span> <span class="n">ptr</span><span class="p">;</span>
+<span class="lineno"> 78</span>   <span class="p">}</span>
+<span class="lineno"> 79</span> 
+<span class="lineno"> 80</span>   <span class="kt">void</span> <span class="nf">Resize</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno"> 81</span>     <span class="kt">uint32_t</span> <span class="n">new_length</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+<span class="lineno"> 82</span>     <span class="k">while</span> <span class="p">(</span><span class="n">new_length</span> <span class="o">&lt;</span> <span class="n">elems_</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 83</span>       <span class="n">new_length</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span>
+<span class="lineno"> 84</span>     <span class="p">}</span>
+<span class="lineno"> 85</span>     <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">new_list</span> <span class="o">=</span> <span class="k">new</span> <span class="n">LRUHandle</span><span class="o">*</span><span class="p">[</span><span class="n">new_length</span><span class="p">];</span>
+<span class="lineno"> 86</span>     <span class="n">memset</span><span class="p">(</span><span class="n">new_list</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="k">sizeof</span><span class="p">(</span><span class="n">new_list</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">*</span> <span class="n">new_length</span><span class="p">);</span>
+<span class="lineno"> 87</span>     <span class="kt">uint32_t</span> <span class="n">count</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+<span class="lineno"> 88</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">uint32_t</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">length_</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 89</span>       <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">h</span> <span class="o">=</span> <span class="n">list_</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+<span class="lineno"> 90</span>       <span class="k">while</span> <span class="p">(</span><span class="n">h</span> <span class="o">!=</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno"> 91</span>         <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">next</span> <span class="o">=</span> <span class="n">h</span><span class="o">-&gt;</span><span class="n">next_hash</span><span class="p">;</span>
+<span class="lineno"> 92</span>         <span class="n">Slice</span> <span class="n">key</span> <span class="o">=</span> <span class="n">h</span><span class="o">-&gt;</span><span class="n">key</span><span class="p">();</span>
+<span class="lineno"> 93</span>         <span class="kt">uint32_t</span> <span class="n">hash</span> <span class="o">=</span> <span class="n">h</span><span class="o">-&gt;</span><span class="n">hash</span><span class="p">;</span>
+<span class="lineno"> 94</span>         <span class="n">LRUHandle</span><span class="o">**</span> <span class="n">ptr</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">new_list</span><span class="p">[</span><span class="n">hash</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">new_length</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)];</span>
+<span class="lineno"> 95</span>         <span class="n">h</span><span class="o">-&gt;</span><span class="n">next_hash</span> <span class="o">=</span> <span class="o">*</span><span class="n">ptr</span><span class="p">;</span>
+<span class="lineno"> 96</span>         <span class="o">*</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">h</span><span class="p">;</span>
+<span class="lineno"> 97</span>         <span class="n">h</span> <span class="o">=</span> <span class="n">next</span><span class="p">;</span>
+<span class="lineno"> 98</span>         <span class="n">count</span><span class="o">++</span><span class="p">;</span>
+<span class="lineno"> 99</span>       <span class="p">}</span>
+<span class="lineno">100</span>     <span class="p">}</span>
+<span class="lineno">101</span>     <span class="n">assert</span><span class="p">(</span><span class="n">elems_</span> <span class="o">==</span> <span class="n">count</span><span class="p">);</span>
+<span class="lineno">102</span>     <span class="k">delete</span><span class="p">[]</span> <span class="n">list_</span><span class="p">;</span>
+<span class="lineno">103</span>     <span class="n">list_</span> <span class="o">=</span> <span class="n">new_list</span><span class="p">;</span>
+<span class="lineno">104</span>     <span class="n">length_</span> <span class="o">=</span> <span class="n">new_length</span><span class="p">;</span>
+<span class="lineno">105</span>   <span class="p">}</span>
+<span class="lineno">106</span> <span class="p">};</span></code></pre></div>
+
+<p><strong>HandleTable</strong>中的每个元素的实现是<strong>LRUHandle</strong>，LRU的实现就是依赖于prev和next指针，如果HashTable中的某个元素被访问，就会把该元素移到双链表的表头，如果朝双链表中插入一个元素，而双链表已达到最大程度，就直接移除掉双链表尾部的元素，因为该元素的访问日期一定比前面的所有元素早(思考一下问什么？)。<strong>HandleTable</strong>的实现是很经典的代码，通常的hash表都是这样实现的，比较有参考价值的代码是Resize函数。附带说一句，面试很容易遇到hashTable，hashMap之类的问题，要是把这里的哈希表看懂了，基本上这类问题你都可以回答得很圆满(特别要注意hash扩容的问题)。当然，类似的hash经典实现还可以去参考<strong>memcache</strong>和<strong>redis</strong>的相关代码，memcache里面的LRUCache还有一个slab的概念，是用于最大限度防止内存碎片并节约内存，而redis的扩容做得很好，不像memcache那样会把整个表锁住，这些都是经典代码，非常值得学习。</p>
+
+<p>另外我再啰嗦一句，上面第13行，<strong>LRUHandle</strong>结构体的最后一个字段是char key_data[1]。C基础不太牢固的同学可能会疑问，为什么只用了1个字节。其实这里仅仅一个字节的占位符而已，由于这是结构体的最后一个元素，所以真正的数据可以接在后面，而不会影响其他字段。类似的还有<strong>redis</strong>中的<strong>sds</strong>数据结构，其声明为<code>struct sdshdr { szie_t len; char data[]; }</code>，这种形式也是很少见的，有兴趣的同学可以去google一下这到底是什么意思。把sdshdr理解了，你就能理解leveldb这里的HandleTable中的<code>char key_data[1]</code>的含义啦。</p>
+
 
   </article>
 
