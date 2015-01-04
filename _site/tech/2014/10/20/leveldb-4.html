@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="baidu-site-verification" content="NPAJOx6yMh" />
 
     <title>和我一起学习leveldb [4 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
@@ -12,6 +13,16 @@
 
     <link rel="stylesheet" href="/css/main.css">
     <link rel="canonical" href="http://someaddr.com/tech/2014/10/20/leveldb-4.html">
+
+    <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?c93f5a7898a7a183519a6ce052fdb0c3";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+    </script>
 
 </head>
 
@@ -78,7 +89,7 @@
 <span class="lineno"> 9</span> <span class="cp">#endif</span>
 <span class="lineno">10</span> <span class="p">}</span></code></pre></div>
 
-<p>32位整数，编码成4个字节的整数，如果是小尾顺序(及低地址存低字节)，那么就直接memcpy到字符数组中，如果是大尾顺序，就做一下处理。再来看Fixed32的解码：</p>
+<p>32位整数，编码成4个字节的整数，如果是小尾顺序(即低地址存低字节)，那么就直接memcpy到字符数组中，如果是大尾顺序，就做一下处理。再来看Fixed32的解码：</p>
 
 <div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="kr">inline</span> <span class="kt">uint32_t</span> <span class="nf">DecodeFixed32</span><span class="p">(</span><span class="k">const</span> <span class="kt">char</span><span class="o">*</span> <span class="n">ptr</span><span class="p">)</span> <span class="p">{</span>
 <span class="lineno"> 2</span>     <span class="k">if</span> <span class="p">(</span><span class="n">port</span><span class="o">::</span><span class="n">kLittleEndian</span><span class="p">)</span> <span class="p">{</span>

@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="baidu-site-verification" content="NPAJOx6yMh" />
 
     <title>和我一起学习leveldb [6 util(续)]</title>
     <meta name="description" content="岂能尽如人意 但求无愧我心
@@ -12,6 +13,16 @@
 
     <link rel="stylesheet" href="/css/main.css">
     <link rel="canonical" href="http://someaddr.com/tech/2014/11/07/leveldb-6.html">
+
+    <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?c93f5a7898a7a183519a6ce052fdb0c3";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+    </script>
 
 </head>
 
@@ -569,7 +580,7 @@
 <span class="lineno">46</span>     <span class="k">return</span> <span class="n">s</span><span class="p">;</span>
 <span class="lineno">47</span>   <span class="p">}</span></code></pre></div>
 
-<p><code>PosixMmapFile</code>还剩下两个成员函数，<code>Append</code>和<code>Sync</code>。这两个函数的逻辑都很简单。<code>Append</code>是顺着映射的内存写（使用memcpy完成写操作），如果写到了映射的边界，就先<code>UnmapCurrentRegion</code>，再调用<code>MapNewRegion</code>函数在文件的末尾再映射一块新的内存继续写，直至写完。<code>Sync</code>函数完成同步操作。首先判断是否<code>pending_sync_</code>是否为<strong>true</strong>，如果为true，说明在上次UnmapRegion之时，还没有做过fdatasync操作（munmap的时候，OS会把unmap的内存中的内容刷进文件，但是OS默认是异步刷盘，因此这里调用fdatasync完成同步）。然后判断当前写入点和当前同步点的位置，如果当前写入点的位置在当前同步点之后，那么需要把同步点和写入点之间这一段未同步的数据进行同步。这里调用<code>msync</code>完成同步（注意这里调用msync的最后一个参数是MS_SYNC，因此是进行同步刷盘的），而成员函数<code>TruncateToPageBoundary</code>就在此发挥作用，用于计算内存地址的页边界，因为<code>msync</code>是以页为单位进行同步的。这里附带说两句，被mmap的内存，在被写入或者修改数据之后，要直到munmap时才会被异步刷盘，如果需要立即同步，就需要调用<code>msync</code>实现，另外在这里完成磁盘数据同步作者调用了<code>fdatasync</code>，有兴趣的同学可以去man一下fsync和fdatasync，这两个函数是有区别的，fdatasync性能更高，因为它不会去同步文件的一些元数据信息。另外提一下，操作系统的写文件操作，默认都是异步刷盘，也就是写磁盘操作由进程提交给操作系统之后，就立即返回，而不是等到操作系统真正把数据写入到磁盘之后。异步刷盘的速度比同步刷盘快上千倍，当然其缺点是如果在进程把数据提交到操作系统后，系统突然宕机，那么这些数据就不会被真正写到磁盘上，而进程却以为数据已经成功写入了。当然这种情况只有在宕机才会出现，如果进程崩溃，是不会出现数据丢失的（因为这时候进程已经把写盘请求提交给OS了）。要确保宕机数据不丢，就需要使用同步刷盘（在posix系统中，同步刷盘的方式是在写操作返回之前调用<code>fsync(...)</code> 或 <code>fdatasync(...)</code> 或 <code>msync(..., MS_SYNC)</code> ）。在leveldb的实现中，在性能和数据安全上做出了折衷，也就是每过一段时间做一次异步刷盘操作。</p>
+<p><code>PosixMmapFile</code>还剩下两个成员函数，<code>Append</code>和<code>Sync</code>。这两个函数的逻辑都很简单。<code>Append</code>是顺着映射的内存写（使用memcpy完成写操作），如果写到了映射的边界，就先<code>UnmapCurrentRegion</code>，再调用<code>MapNewRegion</code>函数在文件的末尾再映射一块新的内存继续写，直至写完。<code>Sync</code>函数完成同步操作。首先判断是否<code>pending_sync_</code>是否为<strong>true</strong>，如果为true，说明在上次UnmapRegion之时，还没有做过fdatasync操作（munmap的时候，OS会把unmap的内存中的内容刷进文件，但是OS默认是异步刷盘，因此这里调用fdatasync完成同步）。然后判断当前写入点和当前同步点的位置，如果当前写入点的位置在当前同步点之后，那么需要把同步点和写入点之间这一段未同步的数据进行同步。这里调用<code>msync</code>完成同步（注意这里调用msync的最后一个参数是MS_SYNC，因此是进行同步刷盘的），而成员函数<code>TruncateToPageBoundary</code>就在此发挥作用，用于计算内存地址的页边界，因为<code>msync</code>是以页为单位进行同步的。这里附带说两句，被mmap的内存，在被写入或者修改数据之后，要直到munmap时才会被异步刷盘，如果需要立即同步，就需要调用<code>msync</code>实现，另外在这里完成磁盘数据同步作者调用了<code>fdatasync</code>，有兴趣的同学可以去man一下fsync和fdatasync，这两个函数是有区别的，fdatasync性能更高，因为它不会去同步文件的一些元数据信息。另外提一下，操作系统的写文件操作，默认都是异步刷盘，也就是写磁盘操作由进程提交给操作系统之后，就立即返回，而不是等到操作系统真正把数据写入到磁盘之后。异步刷盘的速度比同步刷盘快上千倍，当然其缺点是如果在进程把数据提交到操作系统后，系统突然宕机，那么这些数据就不会被真正写到磁盘上，而进程却以为数据已经成功写入了。当然这种情况只有在宕机才会出现，如果进程崩溃，是不会出现数据丢失的（因为这时候进程已经把写盘请求提交给OS了）。要确保宕机数据不丢，就需要使用同步刷盘（在posix系统中，同步刷盘的方式是在写操作返回之前调用<code>fsync(...)</code> 或 <code>fdatasync(...)</code> 或 <code>msync(..., MS_SYNC)</code> ）。在leveldb的实现中，在性能和数据安全上做出了折衷，也就是每过一段时间做一次同步刷盘操作。</p>
 
 <p>至此，本篇开始提到的Env中需要实现的几个类已经全部分析完。最后还要说一下PosixEnv中实现的一个做任务的后台线程池，这里面使用<code>std::deque</code>实现一个双向队列，<code>Schedule</code>实现了把一个任务进队的操作，<code>BGThread</code>则是不停的从队列中取任务来做，这使用的是APUE中论述的经典队列模型，我这里把具体实现的代码贴出来，就不再多费口舌分析了。看不懂的同学请参考APUE第二版11.6节程序清单11-9。</p>
 

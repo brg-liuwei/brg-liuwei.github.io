@@ -6,8 +6,8 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Sun, 14 Dec 2014 10:50:07 +0800</pubDate>
-    <lastBuildDate>Sun, 14 Dec 2014 10:50:07 +0800</lastBuildDate>
+    <pubDate>Sun, 04 Jan 2015 15:27:31 +0800</pubDate>
+    <lastBuildDate>Sun, 04 Jan 2015 15:27:31 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -788,7 +788,7 @@
 &lt;span class=&quot;lineno&quot;&gt;46&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;return&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
 &lt;span class=&quot;lineno&quot;&gt;47&lt;/span&gt;   &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 
-&lt;p&gt;&lt;code&gt;PosixMmapFile&lt;/code&gt;还剩下两个成员函数，&lt;code&gt;Append&lt;/code&gt;和&lt;code&gt;Sync&lt;/code&gt;。这两个函数的逻辑都很简单。&lt;code&gt;Append&lt;/code&gt;是顺着映射的内存写（使用memcpy完成写操作），如果写到了映射的边界，就先&lt;code&gt;UnmapCurrentRegion&lt;/code&gt;，再调用&lt;code&gt;MapNewRegion&lt;/code&gt;函数在文件的末尾再映射一块新的内存继续写，直至写完。&lt;code&gt;Sync&lt;/code&gt;函数完成同步操作。首先判断是否&lt;code&gt;pending_sync_&lt;/code&gt;是否为&lt;strong&gt;true&lt;/strong&gt;，如果为true，说明在上次UnmapRegion之时，还没有做过fdatasync操作（munmap的时候，OS会把unmap的内存中的内容刷进文件，但是OS默认是异步刷盘，因此这里调用fdatasync完成同步）。然后判断当前写入点和当前同步点的位置，如果当前写入点的位置在当前同步点之后，那么需要把同步点和写入点之间这一段未同步的数据进行同步。这里调用&lt;code&gt;msync&lt;/code&gt;完成同步（注意这里调用msync的最后一个参数是MS_SYNC，因此是进行同步刷盘的），而成员函数&lt;code&gt;TruncateToPageBoundary&lt;/code&gt;就在此发挥作用，用于计算内存地址的页边界，因为&lt;code&gt;msync&lt;/code&gt;是以页为单位进行同步的。这里附带说两句，被mmap的内存，在被写入或者修改数据之后，要直到munmap时才会被异步刷盘，如果需要立即同步，就需要调用&lt;code&gt;msync&lt;/code&gt;实现，另外在这里完成磁盘数据同步作者调用了&lt;code&gt;fdatasync&lt;/code&gt;，有兴趣的同学可以去man一下fsync和fdatasync，这两个函数是有区别的，fdatasync性能更高，因为它不会去同步文件的一些元数据信息。另外提一下，操作系统的写文件操作，默认都是异步刷盘，也就是写磁盘操作由进程提交给操作系统之后，就立即返回，而不是等到操作系统真正把数据写入到磁盘之后。异步刷盘的速度比同步刷盘快上千倍，当然其缺点是如果在进程把数据提交到操作系统后，系统突然宕机，那么这些数据就不会被真正写到磁盘上，而进程却以为数据已经成功写入了。当然这种情况只有在宕机才会出现，如果进程崩溃，是不会出现数据丢失的（因为这时候进程已经把写盘请求提交给OS了）。要确保宕机数据不丢，就需要使用同步刷盘（在posix系统中，同步刷盘的方式是在写操作返回之前调用&lt;code&gt;fsync(...)&lt;/code&gt; 或 &lt;code&gt;fdatasync(...)&lt;/code&gt; 或 &lt;code&gt;msync(..., MS_SYNC)&lt;/code&gt; ）。在leveldb的实现中，在性能和数据安全上做出了折衷，也就是每过一段时间做一次异步刷盘操作。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;PosixMmapFile&lt;/code&gt;还剩下两个成员函数，&lt;code&gt;Append&lt;/code&gt;和&lt;code&gt;Sync&lt;/code&gt;。这两个函数的逻辑都很简单。&lt;code&gt;Append&lt;/code&gt;是顺着映射的内存写（使用memcpy完成写操作），如果写到了映射的边界，就先&lt;code&gt;UnmapCurrentRegion&lt;/code&gt;，再调用&lt;code&gt;MapNewRegion&lt;/code&gt;函数在文件的末尾再映射一块新的内存继续写，直至写完。&lt;code&gt;Sync&lt;/code&gt;函数完成同步操作。首先判断是否&lt;code&gt;pending_sync_&lt;/code&gt;是否为&lt;strong&gt;true&lt;/strong&gt;，如果为true，说明在上次UnmapRegion之时，还没有做过fdatasync操作（munmap的时候，OS会把unmap的内存中的内容刷进文件，但是OS默认是异步刷盘，因此这里调用fdatasync完成同步）。然后判断当前写入点和当前同步点的位置，如果当前写入点的位置在当前同步点之后，那么需要把同步点和写入点之间这一段未同步的数据进行同步。这里调用&lt;code&gt;msync&lt;/code&gt;完成同步（注意这里调用msync的最后一个参数是MS_SYNC，因此是进行同步刷盘的），而成员函数&lt;code&gt;TruncateToPageBoundary&lt;/code&gt;就在此发挥作用，用于计算内存地址的页边界，因为&lt;code&gt;msync&lt;/code&gt;是以页为单位进行同步的。这里附带说两句，被mmap的内存，在被写入或者修改数据之后，要直到munmap时才会被异步刷盘，如果需要立即同步，就需要调用&lt;code&gt;msync&lt;/code&gt;实现，另外在这里完成磁盘数据同步作者调用了&lt;code&gt;fdatasync&lt;/code&gt;，有兴趣的同学可以去man一下fsync和fdatasync，这两个函数是有区别的，fdatasync性能更高，因为它不会去同步文件的一些元数据信息。另外提一下，操作系统的写文件操作，默认都是异步刷盘，也就是写磁盘操作由进程提交给操作系统之后，就立即返回，而不是等到操作系统真正把数据写入到磁盘之后。异步刷盘的速度比同步刷盘快上千倍，当然其缺点是如果在进程把数据提交到操作系统后，系统突然宕机，那么这些数据就不会被真正写到磁盘上，而进程却以为数据已经成功写入了。当然这种情况只有在宕机才会出现，如果进程崩溃，是不会出现数据丢失的（因为这时候进程已经把写盘请求提交给OS了）。要确保宕机数据不丢，就需要使用同步刷盘（在posix系统中，同步刷盘的方式是在写操作返回之前调用&lt;code&gt;fsync(...)&lt;/code&gt; 或 &lt;code&gt;fdatasync(...)&lt;/code&gt; 或 &lt;code&gt;msync(..., MS_SYNC)&lt;/code&gt; ）。在leveldb的实现中，在性能和数据安全上做出了折衷，也就是每过一段时间做一次同步刷盘操作。&lt;/p&gt;
 
 &lt;p&gt;至此，本篇开始提到的Env中需要实现的几个类已经全部分析完。最后还要说一下PosixEnv中实现的一个做任务的后台线程池，这里面使用&lt;code&gt;std::deque&lt;/code&gt;实现一个双向队列，&lt;code&gt;Schedule&lt;/code&gt;实现了把一个任务进队的操作，&lt;code&gt;BGThread&lt;/code&gt;则是不停的从队列中取任务来做，这使用的是APUE中论述的经典队列模型，我这里把具体实现的代码贴出来，就不再多费口舌分析了。看不懂的同学请参考APUE第二版11.6节程序清单11-9。&lt;/p&gt;
 
@@ -1382,7 +1382,7 @@
 &lt;span class=&quot;lineno&quot;&gt; 9&lt;/span&gt; &lt;span class=&quot;cp&quot;&gt;#endif&lt;/span&gt;
 &lt;span class=&quot;lineno&quot;&gt;10&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 
-&lt;p&gt;32位整数，编码成4个字节的整数，如果是小尾顺序(及低地址存低字节)，那么就直接memcpy到字符数组中，如果是大尾顺序，就做一下处理。再来看Fixed32的解码：&lt;/p&gt;
+&lt;p&gt;32位整数，编码成4个字节的整数，如果是小尾顺序(即低地址存低字节)，那么就直接memcpy到字符数组中，如果是大尾顺序，就做一下处理。再来看Fixed32的解码：&lt;/p&gt;
 
 &lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt; 1&lt;/span&gt; &lt;span class=&quot;kr&quot;&gt;inline&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;uint32_t&lt;/span&gt; &lt;span class=&quot;nf&quot;&gt;DecodeFixed32&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;const&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;char&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ptr&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
 &lt;span class=&quot;lineno&quot;&gt; 2&lt;/span&gt;     &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;port&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;kLittleEndian&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
