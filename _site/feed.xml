@@ -6,8 +6,8 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Sun, 04 Jan 2015 15:27:31 +0800</pubDate>
-    <lastBuildDate>Sun, 04 Jan 2015 15:27:31 +0800</lastBuildDate>
+    <pubDate>Fri, 23 Jan 2015 15:33:58 +0800</pubDate>
+    <lastBuildDate>Fri, 23 Jan 2015 15:33:58 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -15,8 +15,6 @@
         <description>&lt;h1 id=&quot;section&quot;&gt;[缓存]&lt;/h1&gt;
 
 &lt;p&gt;这一篇将分析leveldb的cache，请容我慢慢道来。提醒大家一下，上一篇以前你们看到的内容是还没有写完的，今天花了点时间把上一篇抽象环境分析完了，内容很多很杂很丰富，同学们再去看两眼哦，同时别忘了给我的github的这个博客项目加颗星星。&lt;/p&gt;
-
-&lt;p&gt;由于鄙人最近工作比较忙，时间有点紧，所以请大家耐心等待，本篇内容我尽量保证在12月中旬写完，谢谢大家！&lt;/p&gt;
 
 &lt;p&gt;&lt;strong&gt;arena&lt;/strong&gt;是轻量级的内存池，设计很简单，其数据结构如下图所示：&lt;/p&gt;
 
@@ -269,6 +267,43 @@
 &lt;span class=&quot;lineno&quot;&gt;81&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;};&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 
 &lt;p&gt;&lt;strong&gt;HandleTable&lt;/strong&gt;的实现是很经典的代码，通常的hash表都是这样实现的，比较有参考价值的代码是Resize函数。附带说一句，面试很容易遇到hashTable，hashMap之类的问题，要是把这里的哈希表看懂了，基本上这类问题你都可以回答得很圆满(特别要注意hash扩容的问题)。当然，类似的hash经典实现还可以去参考&lt;a href=&quot;http://memcached.org&quot;&gt;&lt;strong&gt;memcached&lt;/strong&gt;&lt;/a&gt;和&lt;a href=&quot;http://redis.io&quot;&gt;&lt;strong&gt;redis&lt;/strong&gt;&lt;/a&gt;的相关代码，当然memcache里面的LRUCache还有一个slab的概念，是用于最大限度防止内存碎片并节约内存，而redis的扩容做得很好，不像memcache那样会把整个表锁住，这些都是经典代码，非常值得学习。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;LRUCache&lt;/strong&gt;是使用&lt;strong&gt;HandleTable&lt;/strong&gt;和双向链表实现的&lt;a href=&quot;http://en.wikipedia.org/wiki/LRU&quot;&gt;&lt;strong&gt;LRU(Least Recently Used)&lt;/strong&gt;&lt;/a&gt;缓存，所有进入LRUCache的元素都被挂到HandleTable的哈希链中，并由HandleTable的扩容机制确保了查找的平均复杂度为O(1)。LRUCache中每个被访问的元素，都会被挂到lru_链的链首，这样就保证了链尾的元素一定是最远被访问的元素。因此，如果cache中的元素已满，在插入新元素之时，只需要直接替换掉lru_链尾的元素就可以了。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;             LRU Cache 示意图
+             +---+---+---+---+---+---+
+HandleTable  | 0 | 1 | 2 |  ...  | N |
+             +---+---+---+---+---+---+
+               |       |           |
+               +       +           +
+             +---+   +---+       +---+
+  lru_ &amp;lt;====&amp;gt;| A |&amp;lt;=&amp;gt;| B |&amp;lt;=====&amp;gt;| C |
+             +---+   +---+       +---+
+               |                /  |
+               +  /============/   +
+             +---+               +---+
+             | D |&amp;lt;=============&amp;gt;| E |&amp;lt;==|
+             +---+               +---+   |
+                                   |     |
+                                   +     |
+                                 +---+   |
+                                 | F |&amp;lt;==|
+                                 +---+
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;上图已经很清晰地说明了LRUCache的实现原理，我再从工程的角度上补充一点，C/C++和其他语言相比，最大的优势和劣势就是内存分配与释放了。动态分配的内存需要手动释放，一方面带来的是那些使用GC的语言不可比拟的性能，另一方面也为开发产品带来了额外的负担和风险。实现LRUCache，不可避免地需要考虑缓存失效之后的内存释放问题。如果一块内存被失效替换掉了，它是否应该立刻被释放掉呢？是否还有别的数据结构在使用这块内存呢？在leveldb的LRUCache实现中，使用了引用计数来解决这个问题，每次删除一块内存(一个Handle)，需要对其调用Unref函数：&lt;/p&gt;
+
+&lt;div class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-c--&quot; data-lang=&quot;c++&quot;&gt;&lt;span class=&quot;lineno&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;void&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;LRUCache&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;::&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;Unref&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;LRUHandle&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;2&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;assert&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;refs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;3&lt;/span&gt;   &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;refs&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;--&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;4&lt;/span&gt;   &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;refs&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;lt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;{&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;5&lt;/span&gt;     &lt;span class=&quot;n&quot;&gt;usage_&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;charge&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;6&lt;/span&gt;     &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;*&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;deleter&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;key&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(),&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;value&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;7&lt;/span&gt;     &lt;span class=&quot;n&quot;&gt;free&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;);&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;8&lt;/span&gt;   &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;
+&lt;span class=&quot;lineno&quot;&gt;9&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+
+&lt;p&gt;&lt;strong&gt;ShardedLRUCache&lt;/strong&gt;&lt;/p&gt;
 
 </description>
         <pubDate>Mon, 17 Nov 2014 00:00:00 +0800</pubDate>
