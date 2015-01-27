@@ -365,7 +365,61 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 <span class="lineno">8</span>   <span class="p">}</span>
 <span class="lineno">9</span> <span class="p">}</span></code></pre></div>
 
-<p><strong>ShardedLRUCache</strong></p>
+<p>最后是<strong>ShardedLRUCache</strong>，这个类的实现非常简单，就是把多个LRUCache放在一个数组（大小为2的4次方）中进行管理，插入或查找一个Handle，首先根据这个Handle的hash值的高4bit，决定这个Handle的位置应该在哪一个LRUCache中，然后再在那个LRUCache中进行操作。看到这里也许就会有点纳闷了，有一个LRUCache就够用了，为什么还需要在其上层实现一个ShardedLRUCache呢？这是因为leveldb是多线程工作的，对每一个LRUCache进行操作，都会把整个LRUCache数据结构锁住。因此，ShardedLRUCache就是用来分担锁开销的。</p>
+
+<p>实现ShardedLRUCache的代码不长，直接贴在下面，作为本章的结束。至此，leveldb源码中的util文件夹已经全部分析完毕，从下一章开始，我将开始对table文件夹进行分析。</p>
+
+<div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">static</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">kNumShardBits</span> <span class="o">=</span> <span class="mi">4</span><span class="p">;</span>
+<span class="lineno"> 2</span> <span class="k">static</span> <span class="k">const</span> <span class="kt">int</span> <span class="n">kNumShards</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">kNumShardBits</span><span class="p">;</span>
+<span class="lineno"> 3</span> 
+<span class="lineno"> 4</span> <span class="k">class</span> <span class="nc">ShardedLRUCache</span> <span class="o">:</span> <span class="k">public</span> <span class="n">Cache</span> <span class="p">{</span>
+<span class="lineno"> 5</span>  <span class="k">private</span><span class="o">:</span>
+<span class="lineno"> 6</span>   <span class="n">LRUCache</span> <span class="n">shard_</span><span class="p">[</span><span class="n">kNumShards</span><span class="p">];</span>
+<span class="lineno"> 7</span>   <span class="n">port</span><span class="o">::</span><span class="n">Mutex</span> <span class="n">id_mutex_</span><span class="p">;</span>
+<span class="lineno"> 8</span>   <span class="kt">uint64_t</span> <span class="n">last_id_</span><span class="p">;</span>
+<span class="lineno"> 9</span> 
+<span class="lineno">10</span>   <span class="k">static</span> <span class="kr">inline</span> <span class="kt">uint32_t</span> <span class="nf">HashSlice</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">s</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">11</span>     <span class="k">return</span> <span class="n">Hash</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span> <span class="n">s</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span> <span class="mi">0</span><span class="p">);</span>
+<span class="lineno">12</span>   <span class="p">}</span>
+<span class="lineno">13</span> 
+<span class="lineno">14</span>   <span class="k">static</span> <span class="kt">uint32_t</span> <span class="nf">Shard</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">hash</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">15</span>     <span class="k">return</span> <span class="n">hash</span> <span class="o">&gt;&gt;</span> <span class="p">(</span><span class="mi">32</span> <span class="o">-</span> <span class="n">kNumShardBits</span><span class="p">);</span>
+<span class="lineno">16</span>   <span class="p">}</span>
+<span class="lineno">17</span> 
+<span class="lineno">18</span>  <span class="k">public</span><span class="o">:</span>
+<span class="lineno">19</span>   <span class="k">explicit</span> <span class="n">ShardedLRUCache</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">capacity</span><span class="p">)</span>
+<span class="lineno">20</span>       <span class="o">:</span> <span class="n">last_id_</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">21</span>     <span class="k">const</span> <span class="kt">size_t</span> <span class="n">per_shard</span> <span class="o">=</span> <span class="p">(</span><span class="n">capacity</span> <span class="o">+</span> <span class="p">(</span><span class="n">kNumShards</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="n">kNumShards</span><span class="p">;</span> <span class="c1">// 向上取整</span>
+<span class="lineno">22</span>     <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">s</span> <span class="o">&lt;</span> <span class="n">kNumShards</span><span class="p">;</span> <span class="n">s</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">23</span>       <span class="n">shard_</span><span class="p">[</span><span class="n">s</span><span class="p">].</span><span class="n">SetCapacity</span><span class="p">(</span><span class="n">per_shard</span><span class="p">);</span>
+<span class="lineno">24</span>     <span class="p">}</span>
+<span class="lineno">25</span>   <span class="p">}</span>
+<span class="lineno">26</span>   <span class="k">virtual</span> <span class="o">~</span><span class="n">ShardedLRUCache</span><span class="p">()</span> <span class="p">{</span> <span class="p">}</span>
+<span class="lineno">27</span>   <span class="k">virtual</span> <span class="n">Handle</span><span class="o">*</span> <span class="n">Insert</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">value</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">charge</span><span class="p">,</span>
+<span class="lineno">28</span>                          <span class="kt">void</span> <span class="p">(</span><span class="o">*</span><span class="n">deleter</span><span class="p">)(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">,</span> <span class="kt">void</span><span class="o">*</span> <span class="n">value</span><span class="p">))</span> <span class="p">{</span>
+<span class="lineno">29</span>     <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">hash</span> <span class="o">=</span> <span class="n">HashSlice</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+<span class="lineno">30</span>     <span class="k">return</span> <span class="n">shard_</span><span class="p">[</span><span class="n">Shard</span><span class="p">(</span><span class="n">hash</span><span class="p">)].</span><span class="n">Insert</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">hash</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">charge</span><span class="p">,</span> <span class="n">deleter</span><span class="p">);</span>
+<span class="lineno">31</span>   <span class="p">}</span>
+<span class="lineno">32</span>   <span class="k">virtual</span> <span class="n">Handle</span><span class="o">*</span> <span class="n">Lookup</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">33</span>     <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">hash</span> <span class="o">=</span> <span class="n">HashSlice</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+<span class="lineno">34</span>     <span class="k">return</span> <span class="n">shard_</span><span class="p">[</span><span class="n">Shard</span><span class="p">(</span><span class="n">hash</span><span class="p">)].</span><span class="n">Lookup</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">hash</span><span class="p">);</span>
+<span class="lineno">35</span>   <span class="p">}</span>
+<span class="lineno">36</span>   <span class="k">virtual</span> <span class="kt">void</span> <span class="n">Release</span><span class="p">(</span><span class="n">Handle</span><span class="o">*</span> <span class="n">handle</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">37</span>     <span class="n">LRUHandle</span><span class="o">*</span> <span class="n">h</span> <span class="o">=</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">LRUHandle</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">handle</span><span class="p">);</span>
+<span class="lineno">38</span>     <span class="n">shard_</span><span class="p">[</span><span class="n">Shard</span><span class="p">(</span><span class="n">h</span><span class="o">-&gt;</span><span class="n">hash</span><span class="p">)].</span><span class="n">Release</span><span class="p">(</span><span class="n">handle</span><span class="p">);</span>
+<span class="lineno">39</span>   <span class="p">}</span>
+<span class="lineno">40</span>   <span class="k">virtual</span> <span class="kt">void</span> <span class="n">Erase</span><span class="p">(</span><span class="k">const</span> <span class="n">Slice</span><span class="o">&amp;</span> <span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">41</span>     <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">hash</span> <span class="o">=</span> <span class="n">HashSlice</span><span class="p">(</span><span class="n">key</span><span class="p">);</span>
+<span class="lineno">42</span>     <span class="n">shard_</span><span class="p">[</span><span class="n">Shard</span><span class="p">(</span><span class="n">hash</span><span class="p">)].</span><span class="n">Erase</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">hash</span><span class="p">);</span>
+<span class="lineno">43</span>   <span class="p">}</span>
+<span class="lineno">44</span>   <span class="k">virtual</span> <span class="kt">void</span><span class="o">*</span> <span class="n">Value</span><span class="p">(</span><span class="n">Handle</span><span class="o">*</span> <span class="n">handle</span><span class="p">)</span> <span class="p">{</span>
+<span class="lineno">45</span>     <span class="k">return</span> <span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="n">LRUHandle</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">handle</span><span class="p">)</span><span class="o">-&gt;</span><span class="n">value</span><span class="p">;</span>
+<span class="lineno">46</span>   <span class="p">}</span>
+<span class="lineno">47</span>   <span class="k">virtual</span> <span class="kt">uint64_t</span> <span class="n">NewId</span><span class="p">()</span> <span class="p">{</span>
+<span class="lineno">48</span>     <span class="n">MutexLock</span> <span class="n">l</span><span class="p">(</span><span class="o">&amp;</span><span class="n">id_mutex_</span><span class="p">);</span>
+<span class="lineno">49</span>     <span class="k">return</span> <span class="o">++</span><span class="p">(</span><span class="n">last_id_</span><span class="p">);</span>
+<span class="lineno">50</span>   <span class="p">}</span>
+<span class="lineno">51</span> <span class="p">};</span></code></pre></div>
 
 
   </article>

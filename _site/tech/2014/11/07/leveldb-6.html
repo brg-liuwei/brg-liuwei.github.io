@@ -76,7 +76,7 @@
   <article class="post-content">
     <h1 id="section">[运行时环境]</h1>
 
-<p>这一节我们来分析leveldb对运行时环境的封装：<strong>env</strong>.
+<p>这一节我们来分析leveldb对运行时环境的封装：<strong>env</strong>。
 <strong>env</strong>的头文件是<strong>include/leveldb/env.h</strong>，<strong>util/env.cc</strong>是env中的一些平台无关的基本操作的实现，<strong>util/env_posix.cc</strong>则是遵循Posix接口的PosixEnv的实现。另外，在helpers/memenv目录中，还实现了一个在纯内存环境中使用的<strong>InMemoryEnv</strong>，我猜测这是用于调试或者跑benchmark的。</p>
 
 <div class="highlight"><pre><code class="language-c--" data-lang="c++"><span class="lineno"> 1</span> <span class="k">class</span> <span class="nc">Env</span> <span class="p">{</span>
