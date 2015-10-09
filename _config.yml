@@ -5,7 +5,7 @@ description: > # this means to ignore newlines until "baseurl:"
     岂能尽如人意
     但求无愧我心
 baseurl: "" # the subpath of your site, e.g. /blog/
-url: "http://someaddr.com" # the base hostname & protocol for your site
+url: "http://brg-liuwei.github.io" # the base hostname & protocol for your site
 twitter_username: NULL
 github_username:  brg-liuwei
 

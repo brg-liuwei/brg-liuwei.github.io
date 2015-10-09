@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "提升C程序员的逼格：从twemproxy源码学习宏定义技巧"
+title: "提升C程序员的'范儿'：从twemproxy源码学习宏定义技巧"
 date: 2014-10-14
 categories: tech
 ---

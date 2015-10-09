@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="baidu-site-verification" content="NPAJOx6yMh" />
+
+    <title>RESUME</title>
+    <meta name="description" content="岂能尽如人意 但求无愧我心
+">
+
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="canonical" href="http://someaddr.com/resume/1987/10/24/resume.html">
+
+    <script>
+    var _hmt = _hmt || [];
+    (function() {
+      var hm = document.createElement("script");
+      hm.src = "//hm.baidu.com/hm.js?c93f5a7898a7a183519a6ce052fdb0c3";
+      var s = document.getElementsByTagName("script")[0]; 
+      s.parentNode.insertBefore(hm, s);
+    })();
+    </script>
+
+</head>
+
+
+  <body>
+
+    <header class="site-header">
+
+  <div class="wrapper">
+
+    <a class="site-title" href="/">Blog of Finesse</a>
+
+    <nav class="site-nav">
+      <a href="#" class="menu-icon">
+        <svg viewBox="0 0 18 15">
+          <path fill="#424242" d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.031C17.335,0,18,0.665,18,1.484L18,1.484z"/>
+          <path fill="#424242" d="M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0c0-0.82,0.665-1.484,1.484-1.484 h15.031C17.335,6.031,18,6.696,18,7.516L18,7.516z"/>
+          <path fill="#424242" d="M18,13.516C18,14.335,17.335,15,16.516,15H1.484C0.665,15,0,14.335,0,13.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.031C17.335,12.031,18,12.696,18,13.516L18,13.516z"/>
+        </svg>
+      </a>
+
+      <div class="trigger">
+        
+          
+          <a class="page-link" href="/about/">About</a>
+          
+        
+          
+        
+          
+        
+          
+        
+      </div>
+    </nav>
+
+  </div>
+
+</header>
+
+
+    <div class="page-content">
+      <div class="wrapper">
+        <div class="post">
+
+  <header class="post-header">
+    <h1 class="post-title">RESUME</h1>
+    <p class="post-meta">Oct 24, 1987</p>
+  </header>
+
+  <article class="post-content">
+    <h3 id="section">1 基本情况</h3>
+<hr />
+<p><strong>姓名：刘炜</strong></p>
+
+<p><strong>性别：男</strong></p>
+
+<p><strong>出生年月：1987年10月</strong></p>
+
+<p><strong>Tel: 159 0164 2637</strong></p>
+
+<p><strong>E-mail: stupidlw [at] 126.com</strong></p>
+
+<h3 id="section-1">2 教育经历</h3>
+<hr />
+
+<p><em>2006年9月 ~ 2010年6月 <a href="http://www.hust.edu.cn">华中科技大学</a> <a href="http://cs.hust.edu.cn/">计算机学院</a> 信息安全 工学学士</em></p>
+
+<p><em>2010年8月 ~ 2013年2月 华中科技大学 计算机学院 计算机系统结构 <a href="http://grid.hust.edu.cn/">集群与网格计算实验室</a> 计算机系统结构 工学硕士</em></p>
+
+<h3 id="section-2">3 工作经历</h3>
+<hr />
+
+<p><strong>2013年3月 ~ 2014年4月 北京搜狐集团 精准广告研发中心 广告研发工程师</strong></p>
+
+<ul>
+  <li><em>广告投放服务器研发与重构 (Ad Server)</em>
+    <ul>
+      <li>用pipeline的形式，与UA(User Attribute),PA(Page Attribute),AdIndex,CTR(Click Through Rate),AdExchange等模块进行数据交互</li>
+      <li>主要涉及技术：nginx, fastcgi, redis, thrift, epoll, 多线程</li>
+    </ul>
+  </li>
+  <li><em>搜狐广告RTB系统研发（Ad Exchange）</em>
+    <ul>
+      <li>将广告竞价请求发送给多家dsp竞价，要求dsp在100ms内完成竞价</li>
+      <li>主要涉及技术：动态连接池，tcp协议栈调优，管理竞价事件，处理竞价超时，流量控制，连接错误自动检测，protobuf</li>
+    </ul>
+  </li>
+  <li><em>广告服务本地缓存透明代理（Local Cache）</em>
+    <ul>
+      <li>广告投放机需要和远程的UA,PA,AdIndex,CTR模块基于thrift进行数据交互，LocalCache充分利用投放机本地多余的内存，在投放机和RPC服务之间充当透明代理的角色，加速数据查询</li>
+      <li>在本项目中为了最大限度地减少响应时间，针对thrift协议进行了详细分析，直接缓存RPC序列化后的二进制数据，去掉了不必要的反序列化操作</li>
+      <li>本项目使用C语言开发，预分配好大块内存，对预分配的内存进行管理</li>
+      <li>使用二项堆实现了超时机制</li>
+    </ul>
+  </li>
+</ul>
+
+<p><strong>2014年4月 ~ 2014年10月 上海倾听信息技术有限公司(蜻蜓FM) 高级后台开发工程师</strong></p>
+
+<ul>
+  <li><em>基于zmq开发的轻量级消息中间件，用于推荐系统的后台数据交互</em>
+    <ul>
+      <li>基于zmq的pub-sub, req-rep, push-pop模式实现消息中间件平台</li>
+      <li>客户端可以动态创建、销毁以上三种模式的zmq消息队列</li>
+      <li>zmq不支持消息持久化，该中间件在服务端实现了消息持久化，为了提升持久化过程的读写性能，采用mmap完成IO操作，实现了零拷贝（zero copy）</li>
+    </ul>
+  </li>
+  <li><em>根据用户推荐数据实现的自动化推送系统</em>
+    <ul>
+      <li>每天将离线处理好的用户推荐数据读入，选取为用户推荐的第一条内容，在该用户最活跃的时段（通过历史收听数据得出用户的活跃时段）向用户推送内容</li>
+      <li>采用leveldb按时间段分库存储待推送信息，在每个时段对对应库中的用户完成推送</li>
+      <li>对用户分组进行AB测试，评测推荐算法效果</li>
+    </ul>
+  </li>
+  <li><em>广告平台</em>
+    <ul>
+      <li>广告管理系统：对开源软件<a href="http://www.revive-adserver.com/">revive-adserver</a>进行修改，满足蜻蜓FM的广告管理要求</li>
+      <li>广告投放机：采用C语言实现的高效异步api服务，实现广告投放，在单核1G的Ubuntu服务器上，单台qps达到一万</li>
+      <li>广告检索服务：每分钟从mysql异步加载广告，在内存中建立二级倒排拉链（dnf算法），对广告进行索引，用于提供对定向广告的实时检索服务</li>
+      <li>广告日志处理：每半小时对所有广告投放服务器上的日志进行汇总处理，计算每个广告的投放数据，写入数据库，用于数据报表的制作和CPM合约广告到量自动停止投放</li>
+    </ul>
+  </li>
+  <li><em>日志系统升级与重构</em>
+    <ul>
+      <li>采用ngx_kafka_module，完成日志从nginx直接发送到kafka集群，后端的kafka消费端实时进行消费，并每小时把日志上传到阿里云的<a href="http://www.aliyun.com/product/oss/">OSS</a>服务</li>
+      <li>采用flume把一部分日志写入到HDFS，供spark进行流式处理（内容推荐部分）和供Hadoop进行离线数据处理（使用Hive进行数据统计）</li>
+      <li>搭建zookeeper，kafka，flume</li>
+    </ul>
+  </li>
+  <li><em>API缓存框架重构</em>
+    <ul>
+      <li>蜻蜓FM的用户api有两级缓存，CDN和SLB，以前在SLB层使用的是nginx自带的proxy_cache，而proxy_cache的不足在于更新缓慢和大量小文件占用过多inode（会使服务器inode耗尽导致无法创建新的磁盘文件），另外由于proxy_cache的purge操作是异步的，导致无法保证CDN和SLB的purge次序</li>
+      <li>采用redis-cluster替代proxy_cache进行重构，使用基于ngx_lua实现的redis-cluster-resty模块实现api缓存，并利用该操作的同步特性，来保证SLB和CDN缓存purge的有序性。另外为了实现对目录的purge操作，对redis-cluster进行了小的修改，为redis增加了一个根据正则表达式批量删除key的命令（根据redis使用的three clause BSD license许可，修改后的代码需要被开源，该分支的地址在<a href="https://github.com/brg-liuwei/redis">https://github.com/brg-liuwei/redis</a>）</li>
+      <li>在CMS更新内容后，需要对api缓存进行purge，我们的api数据库采用的主从架构，内容更新是在master上，需要等到所有slave都同步完成后才能进行CDN回源，为此实现了一个小工具管理purge请求，每条purge请求对应的内容在所有slave都同步完成之后才发送到SLB和CDN</li>
+    </ul>
+  </li>
+</ul>
+
+<h3 id="side-project">4 Side Project</h3>
+<hr />
+
+<h4 id="ngxkafkamodulehttpsgithubcombrg-liuweingxkafkamodule"><a href="https://github.com/brg-liuwei/ngx_kafka_module">ngx_kafka_module</a></h4>
+
+<p>该项目是开发一个<a href="http://nginx.org/">nginx</a>模块，用于将post数据直接转发到对应的<a href="http://kafka.apache.org/">kafka</a> topic之中，可以用于日志消费等场景。在传统的使用kafka收集日志的场景中，需要web服务器先将客户端上报的日志临时存储在本地磁盘，再使用<a href="https://github.com/harelba/tail2kafka">tail2kafka</a>等工具，将磁盘上的日志上传到kafka集群。而使用该模块的好处是可以不需要临时的磁盘空间，日志可以直接通过nginx高效异步地发送到kafka集群，简化了使用kafka收集日志的操作，也提高日志收集服务的性能。该模块实现后，我将该模块用于本司的日志收集重构工作之中，并一直稳定运行至今。值得一提的是，该模块自在github开源以来，在github上已经被国内外多个团队或个人使用，获得十余颗星并多次被fork，并经常收到用户的邮件反馈，京东也有一个团队也和我对该模块的一些特性做过讨论，并根据他们的具体业务场景做了一些改进并在生产环境上使用。</p>
+
+<h4 id="json4chttpsgithubcombrg-liuweijson4c"><a href="https://github.com/brg-liuwei/json4c">json4c</a></h4>
+
+<p>这是在业余时间用C语言实现的一个轻量级json库，对比标准的<a href="http://cjson.sourceforge.net/">cJSON</a>库，json4c使用了内存池管理每个json对象，防止频繁的内存分配，并简化了内存管理。另外，json4c也支持Unicode编码。该库在生产环境中也被多次使用。</p>
+
+<h4 id="cctoolshttpsgithubcombrg-liuweicctools"><a href="https://github.com/brg-liuwei/cctools">cctools</a></h4>
+
+<p>一些常用的C++工具库，包括配置文件读取、日志、时间、内存池和网络等。其中网络部分的设计采用了react模式，并在编译期做了平台检测，可以使用Linux平台的epoll和MacOS的kqueue这两种高效的IO多路复用工具。</p>
+
+<h4 id="gotoolshttpsgithubcombrg-liuweigotools"><a href="https://github.com/brg-liuwei/gotools">gotools</a></h4>
+
+<p>一些常用的golang工具库，其中一些比较有趣的功能有日志rotate以及自动超时删除map。</p>
+
+<h4 id="lua-resty-redis-sessionhttpsgithubcombrg-liuweilua-resty-redis-session"><a href="https://github.com/brg-liuwei/lua-resty-redis-session">lua-resty-redis-session</a></h4>
+
+<p>用<a href="https://www.nginx.com/resources/wiki/modules/lua/">ngx_lua</a>开发web server需要用到会话管理功能，目前<a href="http://openresty.org/">openresty</a>还没有官方的会话管理工具，目前已有的基于ngx_lua的会话管理工具有<a href="https://github.com/bungle/lua-resty-session">lua-resty-session</a>，这是基于SecuritySession协议（该协议把用户信息通过加密的方式存放在cookie中实现会话管理）实现的一个会话管理工具。而lua-resty-redis-session则是用了另一种会话管理手段，即把用户信息存放在服务端。该工具使用redis作为存储层，使用openresty包提供的<a href="https://github.com/openresty/lua-resty-redis">lua-resty-redis</a>读写redis中存储的会话信息，可以方便地针对redis-cluster进行扩展。</p>
+
+<h4 id="godnfhttpsgithubcombrg-liuweigodnf"><a href="https://github.com/brg-liuwei/godnf">godnf</a></h4>
+
+<p>使用go语言实现的广告检索算法dnf (Disjunctive Normal Form) 库，该算法参考论文 <a href="http://theory.stanford.edu/~sergei/papers/vldb09-indexing.pdf">Indexing Boolean Expressions</a>。可以使用godnf包实现快速的布尔表达式检索。</p>
+
+<h3 id="section-3">5 自我评价</h3>
+<hr />
+
+<ul>
+  <li>熟练使用C，C++，go语言进行项目开发</li>
+  <li>熟练使用基本的算法和数据结构，在unix环境下能够熟练进行软件开发和运维</li>
+  <li>熟悉java，lua，python，UNIX shell，javascript，html</li>
+  <li>喜欢钻研技术，曾研读过nginx，redis，leveldb，memcache等著名开源项目的源代码，并从阅读分析高质量源码中学习技术</li>
+  <li>关注openresty社区，关注nginx社区的发展</li>
+  <li>希望能够深入学习并实践互联网广告技术</li>
+</ul>
+
+  </article>
+
+  <!-- <div id="disqus_thread"></div>
+<script type="text/javascript">
+    /* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+    var disqus_shortname = 'brgliuwei'; // required: replace example with your forum shortname
+
+    /* * * DON'T EDIT BELOW THIS LINE * * */
+    (function() {
+        var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+        dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+        (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+ -->
+  <!-- 多说评论框 start -->
+<!--   data-thread-key="请将此处替换成文章在你的站点中的ID" data-title="请替换成文章的标题" data-url="请替换成文章的网址" -->
+    <div class="ds-thread"></div>
+<!-- 多说评论框 end -->
+<!-- 多说公共JS代码 start (一个网页只需插入一次) -->
+<script type="text/javascript">
+var duoshuoQuery = {short_name:"brgliuwei"};
+    (function() {
+        var ds = document.createElement('script');
+        ds.type = 'text/javascript';ds.async = true;
+        ds.src = (document.location.protocol == 'https:' ? 'https:' : 'http:') + '//static.duoshuo.com/embed.js';
+        ds.charset = 'UTF-8';
+        (document.getElementsByTagName('head')[0] 
+         || document.getElementsByTagName('body')[0]).appendChild(ds);
+    })();
+
+    </script>
+<!-- 多说公共JS代码 end -->
+
+  <script type="text/javascript">
+    var links = document.links;
+     
+    for (var i = 0, linksLength = links.length; i < linksLength; i++) {
+       if (links[i].hostname != window.location.hostname) {
+           links[i].target = '_blank';
+       } 
+    }
+    function addBlankTargetForLinks() {
+        $('a[href^="http"]').each(function() {
+            $(this).attr('target', '_blank');
+        })
+    }
+    
+    $(document).bind('DOMNodeInserted', function(event) {
+        addBlankTargetForLinks();
+    });
+</script>
+ <!-- 为href跳转添加"_blank"标签，实现打开新标签页跳转 -->
+</div>
+
+      </div>
+    </div>
+
+    <footer class="site-footer">
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Blog of Finesse</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col  footer-col-1">
+        <ul class="contact-list">
+          <li>Blog of Finesse</li>
+          <li><a href="mailto:stupidlw@126.com">stupidlw@126.com</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-2">
+        <ul class="social-media-list">
+          
+          <li>
+            <a href="https://github.com/brg-liuwei">
+              <span class="icon  icon--github">
+                <svg viewBox="0 0 16 16">
+                  <path fill="#828282" d="M7.999,0.431c-4.285,0-7.76,3.474-7.76,7.761 c0,3.428,2.223,6.337,5.307,7.363c0.388,0.071,0.53-0.168,0.53-0.374c0-0.184-0.007-0.672-0.01-1.32 c-2.159,0.469-2.614-1.04-2.614-1.04c-0.353-0.896-0.862-1.135-0.862-1.135c-0.705-0.481,0.053-0.472,0.053-0.472 c0.779,0.055,1.189,0.8,1.189,0.8c0.692,1.186,1.816,0.843,2.258,0.645c0.071-0.502,0.271-0.843,0.493-1.037 C4.86,11.425,3.049,10.76,3.049,7.786c0-0.847,0.302-1.54,0.799-2.082C3.768,5.507,3.501,4.718,3.924,3.65 c0,0,0.652-0.209,2.134,0.796C6.677,4.273,7.34,4.187,8,4.184c0.659,0.003,1.323,0.089,1.943,0.261 c1.482-1.004,2.132-0.796,2.132-0.796c0.423,1.068,0.157,1.857,0.077,2.054c0.497,0.542,0.798,1.235,0.798,2.082 c0,2.981-1.814,3.637-3.543,3.829c0.279,0.24,0.527,0.713,0.527,1.437c0,1.037-0.01,1.874-0.01,2.129 c0,0.208,0.14,0.449,0.534,0.373c3.081-1.028,5.302-3.935,5.302-7.362C15.76,3.906,12.285,0.431,7.999,0.431z"/>
+                </svg>
+              </span>
+
+              <span class="username">brg-liuwei</span>
+            </a>
+          </li>
+          
+
+          
+        </ul>
+      </div>
+
+      <div class="footer-col  footer-col-3">
+        <p class="text">岂能尽如人意 但求无愧我心
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+
+
+  </body>
+
+</html>

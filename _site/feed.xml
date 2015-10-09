@@ -6,9 +6,54 @@
 </description>
     <link>http://someaddr.com/</link>
     <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Tue, 27 Jan 2015 14:26:50 +0800</pubDate>
-    <lastBuildDate>Tue, 27 Jan 2015 14:26:50 +0800</lastBuildDate>
+    <pubDate>Sat, 10 Oct 2015 00:47:02 +0800</pubDate>
+    <lastBuildDate>Sat, 10 Oct 2015 00:47:02 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
+    
+      <item>
+        <title>和我一起学习leveldb [8 table]</title>
+        <description>&lt;p&gt;时间过得真快，距离上一篇完成日已经有点时日了，光阴如白驹过隙，一晃就到了2015年的开春，在这春光明媚、冰河解冻、万物复苏的时节，我也结束了自己的蛰伏季，重新拾起“笔”，开始对本系列博文的耕作。&lt;/p&gt;
+
+&lt;h1 id=&quot;section&quot;&gt;[表结构]&lt;/h1&gt;
+
+&lt;p&gt;年前结束了对port和util目录的分析，接下来我们开始分析table目录，通过对table目录下的源代码的学习，我们可以得知leveldb的表文件在内存和磁盘中的数据结构。按照前面的写作惯例，我们还是先来查看一下这个目录下的代码结构（不含测试代码）：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;table
+  |
+  +--block.h    // block在内存中的数据结构
+  +--block.cc
+  |
+  +--block_builder.h   // 
+  +--block_builder.cc
+  |
+  +--filter_block.h
+  +--filter_block.cc
+  |
+  +--format.h
+  +--format.cc
+  |
+  +--iterator.cc
+  +--iterator_wrapper.h
+  |
+  +--merger.h
+  +--merger.cc
+  |
+  +--table.cc
+  +--table_builder.cc
+  |
+  +--two_level_iterator.h
+  +--two_level_iterator.cc
+&lt;/code&gt;&lt;/pre&gt;
+
+</description>
+        <pubDate>Wed, 01 Apr 2015 00:00:00 +0800</pubDate>
+        <link>http://someaddr.com/tech/2015/04/01/leveldb-8.html</link>
+        <guid isPermaLink="true">http://someaddr.com/tech/2015/04/01/leveldb-8.html</guid>
+        
+        
+        <category>tech</category>
+        
+      </item>
     
       <item>
         <title>和我一起学习leveldb [7 util(续)]</title>
@@ -1976,71 +2021,6 @@ void AtomicPointer::Release_Store(void *v)     ---  Barrier存入指针
         <pubDate>Wed, 15 Oct 2014 00:00:00 +0800</pubDate>
         <link>http://someaddr.com/tech/2014/10/15/leveldb-1.html</link>
         <guid isPermaLink="true">http://someaddr.com/tech/2014/10/15/leveldb-1.html</guid>
-        
-        
-        <category>tech</category>
-        
-      </item>
-    
-      <item>
-        <title>和我一起学习leveldb [0 源码结构]</title>
-        <description>&lt;h1 id=&quot;section&quot;&gt;[源码结构]&lt;/h1&gt;
-
-&lt;p&gt;近段时间在工作中使用leveldb较多，越来越觉得这个工具用起来相当方便(如果你不知道什么是leveldb，请看 &lt;a href=&quot;https://github.com/google/leveldb&quot;&gt;这里&lt;/a&gt;)，关于leveldb的背景，这里就不多言了，毕竟不是写学术论文。一直想认真读一读leveldb的源码，学习Google的两位大牛工程师的杰作，无奈之前有两次都是读到中途因为各种事务中断很长时间，导致接续不济，青黄不接。于是萌生写这个连载的念头，一来是push自己，二来也是做一份笔记，以后可以备忘复习，另外也可以留一点下水拙作，贻笑大方。&lt;/p&gt;
-
-&lt;p&gt;先介绍一下leveldb的代码结构和说明文档：&lt;/p&gt;
-
-&lt;pre&gt;&lt;code&gt;leveldb-1.4.0  
-  |
-  +--- port           &amp;lt;=== 提供各个平台的基本接口
-  |
-  +--- util           &amp;lt;=== 提供一些通用工具类
-  |
-  +--- helpers
-  |      |
-  |      +--- memenv  &amp;lt;=== Env的一个具体实现(Env是leveldb封装的运行环境)
-  |
-  +--- table          &amp;lt;=== 磁盘数据结构
-  |
-  +--- db             &amp;lt;=== db的所有实现
-  |
-  +--- doc
-  |     |
-  |     +--- table_format.txt   &amp;lt;=== 磁盘文件数据结构说明
-  |     |
-  |     +--- log_format.txt     &amp;lt;=== 日志文件（用于宕机恢复未刷盘的数据）数据结构说明
-  |     |
-  |     +--- impl.html          &amp;lt;=== 一些实现
-  |     |
-  |     +--- index.html         &amp;lt;=== 使用说明
-  |     |
-  |     +--- bench.html         &amp;lt;=== 测试数据
-  |
-  +--- include
-         |
-         +--- leveldb           &amp;lt;=== 所有头文件
-                |
-                +--- c.h               &amp;lt;=== 提供给C的接口
-                +--- cache.h
-                +--- comparator.h
-                +--- db.h
-                +--- env.h
-                +--- filter_policy.h
-                +--- iterator.h
-                +--- options.h
-                +--- slice.h
-                +--- status.h
-                +--- table.h
-                +--- table_builder.h
-                +--- write_batch.h
-&lt;/code&gt;&lt;/pre&gt;
-
-&lt;p&gt;我将按上面目录结构的顺序（下面的目录中的代码会依赖于前面的代码）来逐步分析源码。&lt;/p&gt;
-
-</description>
-        <pubDate>Wed, 15 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/15/leveldb-0.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/15/leveldb-0.html</guid>
         
         
         <category>tech</category>
