@@ -4,10 +4,10 @@
     <title>Blog of Finesse</title>
     <description>岂能尽如人意 但求无愧我心
 </description>
-    <link>http://someaddr.com/</link>
-    <atom:link href="http://someaddr.com/feed.xml" rel="self" type="application/rss+xml" />
-    <pubDate>Sat, 10 Oct 2015 00:47:02 +0800</pubDate>
-    <lastBuildDate>Sat, 10 Oct 2015 00:47:02 +0800</lastBuildDate>
+    <link>http://brg-liuwei.github.io/</link>
+    <atom:link href="http://brg-liuwei.github.io/feed.xml" rel="self" type="application/rss+xml" />
+    <pubDate>Wed, 14 Oct 2015 11:33:43 +0800</pubDate>
+    <lastBuildDate>Wed, 14 Oct 2015 11:33:43 +0800</lastBuildDate>
     <generator>Jekyll v2.3.0</generator>
     
       <item>
@@ -47,8 +47,8 @@
 
 </description>
         <pubDate>Wed, 01 Apr 2015 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2015/04/01/leveldb-8.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2015/04/01/leveldb-8.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2015/04/01/leveldb-8.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2015/04/01/leveldb-8.html</guid>
         
         
         <category>tech</category>
@@ -406,8 +406,8 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 
 </description>
         <pubDate>Mon, 17 Nov 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/11/17/leveldb-7.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/11/17/leveldb-7.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/11/17/leveldb-7.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/11/17/leveldb-7.html</guid>
         
         
         <category>tech</category>
@@ -985,8 +985,8 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 
 </description>
         <pubDate>Fri, 07 Nov 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/11/07/leveldb-6.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/11/07/leveldb-6.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/11/07/leveldb-6.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/11/07/leveldb-6.html</guid>
         
         
         <category>tech</category>
@@ -1184,8 +1184,8 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 &lt;p&gt;分析了这么多，你晕了吗？ :)&lt;/p&gt;
 </description>
         <pubDate>Mon, 03 Nov 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/11/03/jni.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/11/03/jni.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/11/03/jni.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/11/03/jni.html</guid>
         
         
         <category>tech</category>
@@ -1293,8 +1293,8 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 
 </description>
         <pubDate>Sun, 02 Nov 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/11/02/lua-cosocket.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/11/02/lua-cosocket.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/11/02/lua-cosocket.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/11/02/lua-cosocket.html</guid>
         
         
         <category>tech</category>
@@ -1491,8 +1491,8 @@ HandleTable  | 0 | 1 | 2 |  ...  | N |
 
 </description>
         <pubDate>Fri, 24 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/24/leveldb-5.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/24/leveldb-5.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/10/24/leveldb-5.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/10/24/leveldb-5.html</guid>
         
         
         <category>tech</category>
@@ -1629,8 +1629,8 @@ A          B         C          C: 第三字节，最高位是0，表示结束�
 
 </description>
         <pubDate>Mon, 20 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/20/leveldb-4.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/20/leveldb-4.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/10/20/leveldb-4.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/10/20/leveldb-4.html</guid>
         
         
         <category>tech</category>
@@ -1768,8 +1768,8 @@ A          B         C          C: 第三字节，最高位是0，表示结束�
 
 </description>
         <pubDate>Thu, 16 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/16/leveldb-3.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/16/leveldb-3.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/10/16/leveldb-3.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/10/16/leveldb-3.html</guid>
         
         
         <category>tech</category>
@@ -1845,8 +1845,8 @@ A          B         C          C: 第三字节，最高位是0，表示结束�
 
 </description>
         <pubDate>Wed, 15 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/15/leveldb-2.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/15/leveldb-2.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/10/15/leveldb-2.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/10/15/leveldb-2.html</guid>
         
         
         <category>tech</category>
@@ -2019,8 +2019,8 @@ void AtomicPointer::Release_Store(void *v)     ---  Barrier存入指针
 
 </description>
         <pubDate>Wed, 15 Oct 2014 00:00:00 +0800</pubDate>
-        <link>http://someaddr.com/tech/2014/10/15/leveldb-1.html</link>
-        <guid isPermaLink="true">http://someaddr.com/tech/2014/10/15/leveldb-1.html</guid>
+        <link>http://brg-liuwei.github.io/tech/2014/10/15/leveldb-1.html</link>
+        <guid isPermaLink="true">http://brg-liuwei.github.io/tech/2014/10/15/leveldb-1.html</guid>
         
         
         <category>tech</category>
